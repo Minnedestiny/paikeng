@@ -1015,27 +1015,27 @@
     }
   }
 
-  /* Personal Note Box */
+  /* Personal Note Box (compact, fits content width) */
   .note-panel {
-    margin-top: 14px;
-    padding-top: 12px;
+    margin-top: 12px;
+    padding-top: 10px;
     border-top: 1px dashed var(--border);
   }
   .note-display {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 13.5px;
+    border-radius: 9px;
+    padding: 6px 10px;
+    font-size: 13px;
     color: #78350f;
-    line-height: 1.65;
+    line-height: 1.55;
   }
   .note-display-body {
-    flex: 1;
     min-width: 0;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1044,27 +1044,46 @@
     font-size: 12px;
     font-weight: 700;
     color: var(--warn);
-    margin-bottom: 2px;
+    margin-right: 4px;
+  }
+  .note-edit-link {
+    border: none;
+    background: transparent;
+    color: var(--warn);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+  .note-edit-link:hover {
+    opacity: 1;
+    background: rgba(180, 83, 9, 0.1);
   }
   .note-editor {
+    display: inline-block;
+    width: min(100%, 420px);
     background: var(--surface-soft);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 8px 10px;
   }
   .note-editor textarea {
     width: 100%;
-    min-height: 68px;
+    min-height: 42px;
     border: 1px solid var(--border);
     background: #fff;
     color: var(--text);
     font-family: inherit;
-    font-size: 13.5px;
-    line-height: 1.6;
-    padding: 8px 10px;
-    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 6px 9px;
+    border-radius: 7px;
     resize: vertical;
     outline: none;
+    display: block;
   }
   .note-editor textarea:focus {
     border-color: var(--primary);
@@ -1072,17 +1091,17 @@
   .note-editor-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: 6px;
   }
   .btn-note-trigger {
     border: 1px dashed var(--border-strong);
     background: transparent;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
-    padding: 6px 12px;
-    border-radius: 8px;
+    padding: 4px 10px;
+    border-radius: 7px;
     cursor: pointer;
     transition: all 0.15s ease;
   }
@@ -1092,13 +1111,17 @@
     background: var(--primary-soft);
   }
   .wb-note-strip {
+    display: inline-block;
+    width: fit-content;
+    max-width: 100%;
     margin-top: 8px;
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
     border-radius: 8px;
-    padding: 7px 10px;
-    font-size: 13px;
+    padding: 5px 9px;
+    font-size: 12.5px;
     color: #78350f;
+    line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -1746,11 +1769,8 @@
       return `
         <div class="note-panel">
           <div class="note-display">
-            <div class="note-display-body">
-              <div class="note-display-label">个人笔记</div>
-              <div>${escapeHtml(text)}</div>
-            </div>
-            <button type="button" class="btn btn-sm" id="btnEditNote">编辑</button>
+            <span class="note-display-body"><span class="note-display-label">笔记：</span>${escapeHtml(text)}</span>
+            <button type="button" class="note-edit-link" id="btnEditNote">编辑</button>
           </div>
         </div>
       `;
