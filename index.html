@@ -1310,6 +1310,7 @@
           <button type="button" class="mode-btn active" data-mode="seq">顺序刷题</button>
           <button type="button" class="mode-btn" data-mode="rand">随机乱序</button>
           <button type="button" class="mode-btn" data-mode="wrong">错题专攻</button>
+          <button type="button" class="mode-btn" data-mode="wrongRand">错题乱序</button>
           <button type="button" class="mode-btn" data-mode="freq">高频错题 (≥2次)</button>
         </div>
       </div>
@@ -1347,6 +1348,7 @@
           <button type="button" class="mode-btn active" data-mode="seq">顺序刷题</button>
           <button type="button" class="mode-btn" data-mode="rand">随机乱序</button>
           <button type="button" class="mode-btn" data-mode="wrong">本栏错题专攻</button>
+          <button type="button" class="mode-btn" data-mode="wrongRand">本栏错题乱序</button>
         </div>
       </div>
       <div class="filter-row">
@@ -1749,8 +1751,8 @@
   let savedBookmark = null; // snapshot before jumping from search so user can return to exact progress
   let progressState = {
     activeTab: "quiz",
-    quiz: { mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {} },
-    cf: { mode: "seq", cat: "ALL", positions: {} }
+    quiz: { mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {}, indices: {}, queues: {} },
+    cf: { mode: "seq", cat: "ALL", positions: {}, indices: {}, queues: {} }
   };
   let editingNoteId = null;
   let settings = { autoNext: false };
@@ -2062,12 +2064,16 @@
             const ps = parsed.progressState;
             progressState.activeTab = ps.activeTab || "quiz";
             if (ps.quiz && typeof ps.quiz === "object") {
-              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {} }, ps.quiz);
+              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {}, indices: {}, queues: {} }, ps.quiz);
               if (!progressState.quiz.positions || typeof progressState.quiz.positions !== "object") progressState.quiz.positions = {};
+              if (!progressState.quiz.indices || typeof progressState.quiz.indices !== "object") progressState.quiz.indices = {};
+              if (!progressState.quiz.queues || typeof progressState.quiz.queues !== "object") progressState.quiz.queues = {};
             }
             if (ps.cf && typeof ps.cf === "object") {
-              progressState.cf = Object.assign({ mode: "seq", cat: "ALL", positions: {} }, ps.cf);
+              progressState.cf = Object.assign({ mode: "seq", cat: "ALL", positions: {}, indices: {}, queues: {} }, ps.cf);
               if (!progressState.cf.positions || typeof progressState.cf.positions !== "object") progressState.cf.positions = {};
+              if (!progressState.cf.indices || typeof progressState.cf.indices !== "object") progressState.cf.indices = {};
+              if (!progressState.cf.queues || typeof progressState.cf.queues !== "object") progressState.cf.queues = {};
             }
           }
           settings = Object.assign({ autoNext: false }, parsed.settings || {});
@@ -2226,12 +2232,19 @@
 
   function saveQuizProgress(skipCloud) {
     if (savedBookmark) return; // Do not overwrite main progress while viewing search jump
+    const key = getQuizPosKey();
     progressState.quiz.mode = mode;
     progressState.quiz.filterPart = filterPart;
     progressState.quiz.filterChapter = filterChapter;
     progressState.quiz.filterSection = filterSection;
+    if (!progressState.quiz.indices) progressState.quiz.indices = {};
+    if (!progressState.quiz.queues) progressState.quiz.queues = {};
     if (queue.length > 0 && queue[currentIdx]) {
-      progressState.quiz.positions[getQuizPosKey()] = queue[currentIdx];
+      progressState.quiz.positions[key] = queue[currentIdx];
+      progressState.quiz.indices[key] = currentIdx;
+      if (mode === "rand" || mode === "wrong" || mode === "wrongRand" || mode === "freq") {
+        progressState.quiz.queues[key] = queue.slice();
+      }
     }
     saveStorage(!!skipCloud);
   }
@@ -2242,12 +2255,32 @@
 
   function saveCfProgress(skipCloud) {
     if (savedBookmark) return; // Do not overwrite main progress while viewing search jump
+    const key = getCfPosKey();
     progressState.cf.mode = cfMode;
     progressState.cf.cat = cfCat;
+    if (!progressState.cf.indices) progressState.cf.indices = {};
+    if (!progressState.cf.queues) progressState.cf.queues = {};
     if (cfQueue.length > 0 && cfQueue[cfIdx]) {
-      progressState.cf.positions[getCfPosKey()] = cfQueue[cfIdx];
+      progressState.cf.positions[key] = cfQueue[cfIdx];
+      progressState.cf.indices[key] = cfIdx;
+      if (cfMode === "rand" || cfMode === "wrong" || cfMode === "wrongRand") {
+        progressState.cf.queues[key] = cfQueue.slice();
+      }
     }
     saveStorage(!!skipCloud);
+  }
+
+  function reconcileSavedQueue(validIds, savedQueue, isRandomMode) {
+    const validSet = new Set(validIds);
+    if (Array.isArray(savedQueue) && savedQueue.length > 0) {
+      const kept = savedQueue.filter(id => validSet.has(id));
+      const keptSet = new Set(kept);
+      const added = validIds.filter(id => !keptSet.has(id));
+      if (kept.length > 0) {
+        return kept.concat(isRandomMode ? shuffle(added) : added);
+      }
+    }
+    return isRandomMode ? shuffle(validIds) : validIds;
   }
 
   function renderReturnBanners() {
@@ -2477,26 +2510,39 @@
       return true;
     });
 
-    if (mode === "wrong") {
+    if (mode === "wrong" || mode === "wrongRand") {
       list = list.filter(q => {
         const r = getRecord(q.id);
         return r.wrong > 0 && !r.mastered;
       });
-      list.sort((a, b) => getRecord(b.id).wrong - getRecord(a.id).wrong);
+      if (mode === "wrong") {
+        list.sort((a, b) => getRecord(b.id).wrong - getRecord(a.id).wrong);
+      }
     } else if (mode === "freq") {
       list = list.filter(q => {
         const r = getRecord(q.id);
         return r.wrong >= 2 && !r.mastered;
       });
       list.sort((a, b) => getRecord(b.id).wrong - getRecord(a.id).wrong);
-    } else if (mode === "rand") {
-      list = shuffle(list);
     }
 
-    queue = list.map(q => q.id);
-    const savedId = progressState.quiz.positions[getQuizPosKey()];
+    const key = getQuizPosKey();
+    const validIds = list.map(q => q.id);
+    if (mode === "rand" || mode === "wrong" || mode === "wrongRand" || mode === "freq") {
+      const savedQ = progressState.quiz.queues && progressState.quiz.queues[key];
+      queue = reconcileSavedQueue(validIds, savedQ, mode === "rand" || mode === "wrongRand");
+    } else {
+      queue = validIds;
+    }
+
+    const savedId = progressState.quiz.positions && progressState.quiz.positions[key];
     const foundIdx = savedId ? queue.indexOf(savedId) : -1;
-    currentIdx = foundIdx >= 0 ? foundIdx : 0;
+    if (foundIdx >= 0) {
+      currentIdx = foundIdx;
+    } else {
+      const savedIdx = progressState.quiz.indices && typeof progressState.quiz.indices[key] === "number" ? progressState.quiz.indices[key] : 0;
+      currentIdx = queue.length > 0 ? Math.min(savedIdx, queue.length - 1) : 0;
+    }
     editingNoteId = null;
     saveQuizProgress(true);
     renderQuiz();
@@ -2522,7 +2568,7 @@
       shortcutHint.classList.add("hidden");
       let title = "当前筛选范围内暂无题目";
       let desc = "切换篇章或模式即可继续刷题。";
-      if (mode === "wrong") {
+      if (mode === "wrong" || mode === "wrongRand") {
         title = "目前没有待攻克的错题";
         desc = "先去顺序或随机模式刷几道题，答错的题目会自动收录到这里并累计错误次数。";
       } else if (mode === "freq") {
@@ -2688,6 +2734,7 @@
     sessionDone += 1;
     if (isRight) sessionRight += 1;
     currentAnswer = { chosen, isRight };
+    saveQuizProgress(true);
     renderQuiz();
 
     if (isRight && settings.autoNext && currentIdx < queue.length - 1) {
@@ -2721,7 +2768,7 @@
     } else {
       currentIdx = 0;
       currentAnswer = null;
-      if (mode === "rand") queue = shuffle(queue);
+      if (mode === "rand" || mode === "wrongRand") queue = shuffle(queue);
       saveQuizProgress(true);
       showToast("已刷完本组，重新从第 1 题开始");
       renderQuiz();
@@ -3228,19 +3275,31 @@
       return;
     }
     let list = getAllConfusableQuestions().filter(q => cfCat === "ALL" || q.cat === cfCat);
-    if (cfMode === "wrong") {
+    if (cfMode === "wrong" || cfMode === "wrongRand") {
       list = list.filter(q => {
         const r = getRecord(q.id);
         return r.wrong > 0 && !r.mastered;
       });
-      list.sort((a, b) => getRecord(b.id).wrong - getRecord(a.id).wrong);
-    } else if (cfMode === "rand") {
-      list = shuffle(list);
+      if (cfMode === "wrong") {
+        list.sort((a, b) => getRecord(b.id).wrong - getRecord(a.id).wrong);
+      }
     }
-    cfQueue = list.map(q => q.id);
-    const savedId = progressState.cf.positions[getCfPosKey()];
+    const key = getCfPosKey();
+    const validIds = list.map(q => q.id);
+    if (cfMode === "rand" || cfMode === "wrong" || cfMode === "wrongRand") {
+      const savedQ = progressState.cf.queues && progressState.cf.queues[key];
+      cfQueue = reconcileSavedQueue(validIds, savedQ, cfMode === "rand" || cfMode === "wrongRand");
+    } else {
+      cfQueue = validIds;
+    }
+    const savedId = progressState.cf.positions && progressState.cf.positions[key];
     const foundIdx = savedId ? cfQueue.indexOf(savedId) : -1;
-    cfIdx = foundIdx >= 0 ? foundIdx : 0;
+    if (foundIdx >= 0) {
+      cfIdx = foundIdx;
+    } else {
+      const savedIdx = progressState.cf.indices && typeof progressState.cf.indices[key] === "number" ? progressState.cf.indices[key] : 0;
+      cfIdx = cfQueue.length > 0 ? Math.min(savedIdx, cfQueue.length - 1) : 0;
+    }
     editingNoteId = null;
     saveCfProgress(true);
     renderConfusable();
@@ -3287,6 +3346,7 @@
     cfSessionDone += 1;
     if (isRight) cfSessionRight += 1;
     cfAnswer = { chosen, isRight };
+    saveCfProgress(true);
     renderConfusable();
   }
 
@@ -3314,7 +3374,7 @@
       cfIdx = 0;
       cfRevealed = false;
       cfAnswer = null;
-      if (cfMode === "rand") cfQueue = shuffle(cfQueue);
+      if (cfMode === "rand" || cfMode === "wrongRand") cfQueue = shuffle(cfQueue);
       saveCfProgress(true);
       showToast("已刷完本组易混淆考点，重新从第 1 题开始");
       renderConfusable();
@@ -3332,8 +3392,8 @@
       cfShortcutHint.classList.add("hidden");
       cfCardArea.innerHTML = `
         <div class="empty-state">
-          <p class="empty-title">${cfMode === "wrong" ? "本栏目前没有待攻克的错题" : "当前筛选条件下暂无题目"}</p>
-          <p class="empty-desc">${cfMode === "wrong" ? "选择题答错或挖空题点「没记住」的考点，会自动收录到错题本和本栏错题专攻中。" : "切换系列或模式即可继续练习。"}</p>
+          <p class="empty-title">${(cfMode === "wrong" || cfMode === "wrongRand") ? "本栏目前没有待攻克的错题" : "当前筛选条件下暂无题目"}</p>
+          <p class="empty-desc">${(cfMode === "wrong" || cfMode === "wrongRand") ? "选择题答错或挖空题点「没记住」的考点，会自动收录到错题本和本栏错题专攻中。" : "切换系列或模式即可继续练习。"}</p>
           <button type="button" class="btn btn-primary" id="btnCfBackSeq">回到顺序刷题</button>
         </div>
       `;
@@ -3789,8 +3849,15 @@
     for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
       btn.classList.toggle("active", btn.dataset.mode === "wrong");
     }
+    filterPart = wbPart === CONFUSABLE_PART ? "ALL" : wbPart;
+    filterChapter = "ALL";
+    filterSection = "ALL";
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
     switchTab("quiz");
     buildQueue(tfItems.map(x => x.id));
+    saveQuizProgress(true);
     showToast(`已载入 ${tfItems.length} 道判断错题开始专攻`);
   });
 
@@ -4874,7 +4941,7 @@
     currentIdx = 0;
     currentAnswer = null;
     editingNoteId = null;
-    if (mode === "rand") queue = shuffle(queue);
+    if (mode === "rand" || mode === "wrongRand") queue = shuffle(queue);
     saveQuizProgress(true);
     renderQuiz();
     showToast("已回到本组第 1 题");
@@ -4886,7 +4953,7 @@
     cfRevealed = false;
     cfAnswer = null;
     editingNoteId = null;
-    if (cfMode === "rand") cfQueue = shuffle(cfQueue);
+    if (cfMode === "rand" || cfMode === "wrongRand") cfQueue = shuffle(cfQueue);
     saveCfProgress(true);
     renderConfusable();
     showToast("已回到本组第 1 题");
