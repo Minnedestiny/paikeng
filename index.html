@@ -977,6 +977,145 @@
     font-size: 13px;
   }
 
+  html, body {
+    overflow-x: hidden;
+  }
+  .custom-form-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .custom-form-grid > .form-field,
+  .form-field,
+  .filter-row > *,
+  .select-with-add {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .select-with-add {
+    width: 100%;
+  }
+  .select-box {
+    max-width: 100%;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  .select-with-add .select-box {
+    width: 0;
+    flex: 1 1 0%;
+  }
+  .inline-add-box {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .inline-add-box .text-input {
+    min-width: 0;
+  }
+  @media (max-width: 760px) {
+    .custom-form-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Personal Note Box */
+  .note-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  .note-display {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    color: #78350f;
+    line-height: 1.65;
+  }
+  .note-display-body {
+    flex: 1;
+    min-width: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .note-display-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--warn);
+    margin-bottom: 2px;
+  }
+  .note-editor {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .note-editor textarea {
+    width: 100%;
+    min-height: 68px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13.5px;
+    line-height: 1.6;
+    padding: 8px 10px;
+    border-radius: 8px;
+    resize: vertical;
+    outline: none;
+  }
+  .note-editor textarea:focus {
+    border-color: var(--primary);
+  }
+  .note-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .btn-note-trigger {
+    border: 1px dashed var(--border-strong);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-note-trigger:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .wb-note-strip {
+    margin-top: 8px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: #78350f;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .btn-link-mini {
+    border: none;
+    background: transparent;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .btn-link-mini:hover {
+    background: var(--primary-soft);
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 640px) {
@@ -1039,7 +1178,7 @@
 
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-meta">
-        <span>进度：<strong id="progPos">0 / 0</strong></span>
+        <span>进度：<strong id="progPos">0 / 0</strong> <button type="button" class="btn-link-mini" id="btnRestartQuiz">从头刷</button></span>
         <span>本轮正确率：<strong id="progAcc">--</strong> · 总做题 <strong id="progTotalDone">0</strong> 次</span>
       </div>
       <div class="progress-track">
@@ -1068,7 +1207,7 @@
 
     <div class="progress-wrap">
       <div class="progress-meta">
-        <span>进度：<strong id="cfProgPos">0 / 0</strong></span>
+        <span>进度：<strong id="cfProgPos">0 / 0</strong> <button type="button" class="btn-link-mini" id="btnRestartCf">从头刷</button></span>
         <span>本轮掌握率：<strong id="cfProgAcc">--</strong></span>
       </div>
       <div class="progress-track">
@@ -1286,6 +1425,13 @@
   let customQuestions = []; // user-created questions with same schema
   let deletedCustomIds = []; // track deleted custom IDs for clean cloud merge
   let customCategories = { parts: [], sections: {} }; // user-defined parts & sections per part
+  let notes = {}; // { [id]: { text, updatedAt } }
+  let progressState = {
+    activeTab: "quiz",
+    quiz: { mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} },
+    cf: { mode: "seq", cat: "ALL", positions: {} }
+  };
+  let editingNoteId = null;
   let settings = { autoNext: false };
   let syncCfg = { provider: "gitee", token: "", gistId: "", autoSync: true, lastSyncAt: 0 };
   let isSyncing = false;
@@ -1436,6 +1582,8 @@
   const toggleAutoNext = document.getElementById("toggleAutoNext");
   const progressWrap = document.getElementById("progressWrap");
   const progPos = document.getElementById("progPos");
+  const btnRestartQuiz = document.getElementById("btnRestartQuiz");
+  const btnRestartCf = document.getElementById("btnRestartCf");
   const progAcc = document.getElementById("progAcc");
   const progTotalDone = document.getElementById("progTotalDone");
   const progBar = document.getElementById("progBar");
@@ -1476,6 +1624,21 @@
               sections: (parsed.customCategories.sections && typeof parsed.customCategories.sections === "object") ? parsed.customCategories.sections : {}
             };
           }
+          if (parsed.notes && typeof parsed.notes === "object") {
+            notes = parsed.notes;
+          }
+          if (parsed.progressState && typeof parsed.progressState === "object") {
+            const ps = parsed.progressState;
+            progressState.activeTab = ps.activeTab || "quiz";
+            if (ps.quiz && typeof ps.quiz === "object") {
+              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} }, ps.quiz);
+              if (!progressState.quiz.positions || typeof progressState.quiz.positions !== "object") progressState.quiz.positions = {};
+            }
+            if (ps.cf && typeof ps.cf === "object") {
+              progressState.cf = Object.assign({ mode: "seq", cat: "ALL", positions: {} }, ps.cf);
+              if (!progressState.cf.positions || typeof progressState.cf.positions !== "object") progressState.cf.positions = {};
+            }
+          }
           settings = Object.assign({ autoNext: false }, parsed.settings || {});
         }
       }
@@ -1507,7 +1670,7 @@
 
   function saveStorage(skipAutoSync) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, settings }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, notes, progressState, settings }));
     } catch (e) {
       // Ignore storage quota / sandbox restrictions
     }
@@ -1549,6 +1712,111 @@
 
   function getRecord(id) {
     return records[id] || { attempts: 0, wrong: 0, correct: 0, lastResult: null, lastAt: 0, mastered: false };
+  }
+
+  function getNoteText(id) {
+    const n = notes[id];
+    return n && typeof n.text === "string" ? n.text : "";
+  }
+
+  function saveNote(id, text) {
+    const trimmed = String(text || "").trim();
+    notes[id] = { text: trimmed, updatedAt: Date.now() };
+    editingNoteId = null;
+    saveStorage();
+    showToast(trimmed ? "笔记已保存" : "笔记已清空");
+  }
+
+  function renderNoteSectionHtml(id) {
+    const text = getNoteText(id);
+    if (editingNoteId === id) {
+      return `
+        <div class="note-panel">
+          <div class="note-editor">
+            <textarea id="noteInputBox" placeholder="记下口诀、易混对比或自己的理解…">${escapeHtml(text)}</textarea>
+            <div class="note-editor-actions">
+              <button type="button" class="btn btn-sm" id="btnCancelNote">取消</button>
+              <button type="button" class="btn btn-sm btn-primary" id="btnSaveNote">保存笔记</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    if (text) {
+      return `
+        <div class="note-panel">
+          <div class="note-display">
+            <div class="note-display-body">
+              <div class="note-display-label">个人笔记</div>
+              <div>${escapeHtml(text)}</div>
+            </div>
+            <button type="button" class="btn btn-sm" id="btnEditNote">编辑</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="note-panel">
+        <button type="button" class="btn-note-trigger" id="btnEditNote">✎ 添加笔记</button>
+      </div>
+    `;
+  }
+
+  function bindNoteHandlers(container, id, rerenderFn) {
+    const btnEdit = container.querySelector("#btnEditNote");
+    if (btnEdit) {
+      btnEdit.addEventListener("click", () => {
+        editingNoteId = id;
+        rerenderFn();
+        const ta = container.querySelector("#noteInputBox");
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      });
+    }
+    const btnCancel = container.querySelector("#btnCancelNote");
+    if (btnCancel) {
+      btnCancel.addEventListener("click", () => {
+        editingNoteId = null;
+        rerenderFn();
+      });
+    }
+    const btnSave = container.querySelector("#btnSaveNote");
+    if (btnSave) {
+      btnSave.addEventListener("click", () => {
+        const ta = container.querySelector("#noteInputBox");
+        saveNote(id, ta ? ta.value : "");
+        rerenderFn();
+      });
+    }
+  }
+
+  function getQuizPosKey() {
+    return `${mode}|${filterPart}|${filterSection}`;
+  }
+
+  function saveQuizProgress(skipCloud) {
+    progressState.quiz.mode = mode;
+    progressState.quiz.filterPart = filterPart;
+    progressState.quiz.filterSection = filterSection;
+    if (queue.length > 0 && queue[currentIdx]) {
+      progressState.quiz.positions[getQuizPosKey()] = queue[currentIdx];
+    }
+    saveStorage(!!skipCloud);
+  }
+
+  function getCfPosKey() {
+    return `${cfMode}|${cfCat}`;
+  }
+
+  function saveCfProgress(skipCloud) {
+    progressState.cf.mode = cfMode;
+    progressState.cf.cat = cfCat;
+    if (cfQueue.length > 0 && cfQueue[cfIdx]) {
+      progressState.cf.positions[getCfPosKey()] = cfQueue[cfIdx];
+    }
+    saveStorage(!!skipCloud);
   }
 
   function hasAnyQuestion(id) {
@@ -1677,7 +1945,11 @@
     }
 
     queue = list.map(q => q.id);
-    currentIdx = 0;
+    const savedId = progressState.quiz.positions[getQuizPosKey()];
+    const foundIdx = savedId ? queue.indexOf(savedId) : -1;
+    currentIdx = foundIdx >= 0 ? foundIdx : 0;
+    editingNoteId = null;
+    saveQuizProgress(true);
     renderQuiz();
   }
 
@@ -1808,6 +2080,7 @@
           </button>
         </div>
         ${feedbackHtml}
+        ${renderNoteSectionHtml(q.id)}
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnPrev" ${currentIdx === 0 ? "disabled" : ""}>上一题</button>
@@ -1840,6 +2113,7 @@
         renderQuiz();
       });
     }
+    bindNoteHandlers(quizCardArea, q.id, renderQuiz);
   }
 
   function submitChoice(chosen) {
@@ -1877,6 +2151,8 @@
     if (currentIdx > 0) {
       currentIdx -= 1;
       currentAnswer = null;
+      editingNoteId = null;
+      saveQuizProgress(true);
       renderQuiz();
     }
   }
@@ -1884,14 +2160,17 @@
   function goNext() {
     clearTimeout(autoNextTimer);
     if (queue.length === 0) return;
+    editingNoteId = null;
     if (currentIdx < queue.length - 1) {
       currentIdx += 1;
       currentAnswer = null;
+      saveQuizProgress(true);
       renderQuiz();
     } else {
       currentIdx = 0;
       currentAnswer = null;
       if (mode === "rand") queue = shuffle(queue);
+      saveQuizProgress(true);
       showToast("已刷完本组，重新从第 1 题开始");
       renderQuiz();
     }
@@ -2029,6 +2308,7 @@
           </div>
           <div class="wb-item-q">${bodyHtml}</div>
           ${ansPart}
+          ${getNoteText(q.id) ? `<div class="wb-note-strip"><strong>笔记：</strong>${escapeHtml(getNoteText(q.id))}</div>` : ""}
           <div class="wb-item-foot">
             <span>所属栏目：${escapeHtml(q.p)}</span>
             <button type="button" class="btn ${r.mastered ? "" : "btn-mastered"} js-wb-master" data-id="${q.id}">
@@ -2384,7 +2664,11 @@
       list = shuffle(list);
     }
     cfQueue = list.map(q => q.id);
-    cfIdx = 0;
+    const savedId = progressState.cf.positions[getCfPosKey()];
+    const foundIdx = savedId ? cfQueue.indexOf(savedId) : -1;
+    cfIdx = foundIdx >= 0 ? foundIdx : 0;
+    editingNoteId = null;
+    saveCfProgress(true);
     renderConfusable();
   }
 
@@ -2435,22 +2719,27 @@
       cfIdx -= 1;
       cfRevealed = false;
       cfAnswer = null;
+      editingNoteId = null;
+      saveCfProgress(true);
       renderConfusable();
     }
   }
 
   function cfNext() {
     if (cfQueue.length === 0) return;
+    editingNoteId = null;
     if (cfIdx < cfQueue.length - 1) {
       cfIdx += 1;
       cfRevealed = false;
       cfAnswer = null;
+      saveCfProgress(true);
       renderConfusable();
     } else {
       cfIdx = 0;
       cfRevealed = false;
       cfAnswer = null;
       if (cfMode === "rand") cfQueue = shuffle(cfQueue);
+      saveCfProgress(true);
       showToast("已刷完本组易混淆考点，重新从第 1 题开始");
       renderConfusable();
     }
@@ -2580,6 +2869,7 @@
         <p class="question-text">${promptHtml}</p>
         ${controlsHtml}
         ${feedbackHtml}
+        ${renderNoteSectionHtml(item.id)}
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnCfPrev" ${cfIdx === 0 ? "disabled" : ""}>上一题</button>
@@ -2620,10 +2910,14 @@
         renderConfusable();
       });
     }
+    bindNoteHandlers(cfCardArea, item.id, renderConfusable);
   }
 
   function switchTab(tab) {
     activeTab = tab;
+    editingNoteId = null;
+    progressState.activeTab = tab;
+    saveStorage(true);
     tabQuiz.classList.toggle("active", tab === "quiz");
     tabConfusable.classList.toggle("active", tab === "confusable");
     tabWrong.classList.toggle("active", tab === "wrong");
@@ -3025,6 +3319,28 @@
     }
     customQuestions = [...cqMap.values()];
 
+    // 2.5 Merge notes (latest updatedAt wins)
+    if (remote.notes && typeof remote.notes === "object") {
+      for (const id in remote.notes) {
+        const rn = remote.notes[id];
+        if (!rn || typeof rn !== "object") continue;
+        const ln = notes[id];
+        if (!ln || (rn.updatedAt || 0) >= (ln.updatedAt || 0)) {
+          notes[id] = rn;
+        }
+      }
+    }
+
+    // 2.6 Merge progress positions if local doesn't have one yet
+    if (remote.progressState && typeof remote.progressState === "object") {
+      if (remote.progressState.quiz && remote.progressState.quiz.positions) {
+        progressState.quiz.positions = Object.assign({}, remote.progressState.quiz.positions, progressState.quiz.positions);
+      }
+      if (remote.progressState.cf && remote.progressState.cf.positions) {
+        progressState.cf.positions = Object.assign({}, remote.progressState.cf.positions, progressState.cf.positions);
+      }
+    }
+
     // 3. Merge records (keep max attempts/wrong/correct and latest lastResult/mastered)
     const rRecs = (remote.records && typeof remote.records === "object") ? remote.records : {};
     const allIds = new Set(Object.keys(records).concat(Object.keys(rRecs)));
@@ -3134,6 +3450,8 @@
         customQuestions,
         deletedCustomIds,
         customCategories,
+        notes,
+        progressState,
         settings
       });
       const returnedId = await cloudPushGist(provider, token, gistId, payloadStr);
@@ -3205,7 +3523,7 @@
   });
 
   btnExport.addEventListener("click", () => {
-    const payload = JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, settings }, null, 2);
+    const payload = JSON.stringify({ version: 4, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, notes, progressState, settings }, null, 2);
     const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3238,6 +3556,10 @@
             parts: Array.isArray(parsed.customCategories.parts) ? parsed.customCategories.parts : [],
             sections: (parsed.customCategories.sections && typeof parsed.customCategories.sections === "object") ? parsed.customCategories.sections : {}
           };
+        }
+        if (parsed.notes && typeof parsed.notes === "object") notes = parsed.notes;
+        if (parsed.progressState && typeof parsed.progressState === "object") {
+          progressState = Object.assign(progressState, parsed.progressState);
         }
         if (parsed.settings) settings = Object.assign(settings, parsed.settings);
         toggleAutoNext.checked = !!settings.autoNext;
@@ -3308,15 +3630,53 @@
     });
   });
 
-  // Init
+  btnRestartQuiz.addEventListener("click", () => {
+    clearTimeout(autoNextTimer);
+    if (queue.length === 0) return;
+    currentIdx = 0;
+    currentAnswer = null;
+    editingNoteId = null;
+    if (mode === "rand") queue = shuffle(queue);
+    saveQuizProgress(true);
+    renderQuiz();
+    showToast("已回到本组第 1 题");
+  });
+
+  btnRestartCf.addEventListener("click", () => {
+    if (cfQueue.length === 0) return;
+    cfIdx = 0;
+    cfRevealed = false;
+    cfAnswer = null;
+    editingNoteId = null;
+    if (cfMode === "rand") cfQueue = shuffle(cfQueue);
+    saveCfProgress(true);
+    renderConfusable();
+    showToast("已回到本组第 1 题");
+  });
+
+  // Init (restore last mode, filters, tab, and exact question position)
   loadStorage();
   rebuildIndex();
+  mode = progressState.quiz.mode || "seq";
+  filterPart = progressState.quiz.filterPart || "ALL";
+  filterSection = progressState.quiz.filterSection || "ALL";
+  for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  }
+  cfMode = progressState.cf.mode || "seq";
+  cfCat = progressState.cf.cat || "ALL";
+  for (const btn of cfModeGroup.querySelectorAll(".mode-btn")) {
+    btn.classList.toggle("active", btn.dataset.mode === cfMode);
+  }
   populatePartSelects();
   populateSectionSelect();
   populateCustomFormDropdowns(BUILTIN_PARTS[0], null);
   populateCfCats();
   buildCfQueue();
   buildQueue();
+  if (progressState.activeTab && ["quiz", "confusable", "wrong", "custom"].includes(progressState.activeTab)) {
+    switchTab(progressState.activeTab);
+  }
   if (syncCfg.autoSync && syncCfg.token && syncCfg.gistId) {
     runCloudSync(true);
   }
