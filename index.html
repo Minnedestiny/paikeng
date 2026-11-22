@@ -1244,6 +1244,22 @@
     border-radius: 3px;
   }
 
+  .return-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--primary-soft);
+    border: 1px solid #bfdbfe;
+    color: var(--primary);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 640px) {
@@ -1317,6 +1333,7 @@
       </div>
     </div>
 
+    <div id="quizReturnBanner" class="return-banner hidden"></div>
     <div id="quizCardArea"></div>
     <div class="shortcut-hint" id="shortcutHint">快捷键：← 或 1 选「正确」 · → 或 2 选「错误」 · Space 或 Enter 进入下一题</div>
   </section>
@@ -1346,6 +1363,7 @@
       </div>
     </div>
 
+    <div id="cfReturnBanner" class="return-banner hidden"></div>
     <div id="cfCardArea"></div>
     <div class="shortcut-hint" id="cfShortcutHint">快捷键：选择题按 1/2/3 作答 · 挖空题按 Space 看答案，1/← 记住了，2/→ 没记住 · Enter 下一题</div>
   </section>
@@ -1600,6 +1618,11 @@
       </div>
     </div>
 
+    <div class="form-field" style="margin-top:4px;margin-bottom:4px;">
+      <label for="editNoteText">个人笔记 <span class="form-hint">（选填，留空则清空笔记）</span></label>
+      <textarea class="text-area" id="editNoteText" style="min-height:58px;" placeholder="记下口诀、易混对比或个人补充…"></textarea>
+    </div>
+
     <div class="modal-row" style="justify-content:space-between;align-items:center;">
       <button type="button" class="btn btn-danger hidden" id="btnRestoreOriginal">恢复原题</button>
       <div style="display:flex;gap:8px;margin-left:auto;">
@@ -1649,6 +1672,7 @@
   let modalEditId = null;
   let modalEditIsCf = false;
   let modalEditIsOk = false;
+  let savedBookmark = null; // snapshot before jumping from search so user can return to exact progress
   let progressState = {
     activeTab: "quiz",
     quiz: { mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} },
@@ -1897,6 +1921,9 @@
   const editCfAns = document.getElementById("editCfAns");
   const editCfPost = document.getElementById("editCfPost");
   const editCfNote = document.getElementById("editCfNote");
+  const editNoteText = document.getElementById("editNoteText");
+  const quizReturnBanner = document.getElementById("quizReturnBanner");
+  const cfReturnBanner = document.getElementById("cfReturnBanner");
   const btnRestoreOriginal = document.getElementById("btnRestoreOriginal");
   const btnCancelEditModal = document.getElementById("btnCancelEditModal");
   const btnSaveEditModal = document.getElementById("btnSaveEditModal");
@@ -2089,6 +2116,7 @@
   }
 
   function saveQuizProgress(skipCloud) {
+    if (savedBookmark) return; // Do not overwrite main progress while viewing search jump
     progressState.quiz.mode = mode;
     progressState.quiz.filterPart = filterPart;
     progressState.quiz.filterSection = filterSection;
@@ -2103,12 +2131,93 @@
   }
 
   function saveCfProgress(skipCloud) {
+    if (savedBookmark) return; // Do not overwrite main progress while viewing search jump
     progressState.cf.mode = cfMode;
     progressState.cf.cat = cfCat;
     if (cfQueue.length > 0 && cfQueue[cfIdx]) {
       progressState.cf.positions[getCfPosKey()] = cfQueue[cfIdx];
     }
     saveStorage(!!skipCloud);
+  }
+
+  function renderReturnBanners() {
+    if (!savedBookmark) {
+      quizReturnBanner.classList.add("hidden");
+      cfReturnBanner.classList.add("hidden");
+      return;
+    }
+    const label = savedBookmark.label || "原刷题进度";
+    const innerHtml = `
+      <span>当前为搜索跳转查看（未覆盖原进度）</span>
+      <button type="button" class="btn btn-sm btn-primary js-return-bookmark">↩ 返回${escapeHtml(label)}</button>
+    `;
+    quizReturnBanner.innerHTML = innerHtml;
+    cfReturnBanner.innerHTML = innerHtml;
+    quizReturnBanner.classList.toggle("hidden", activeTab !== "quiz");
+    cfReturnBanner.classList.toggle("hidden", activeTab !== "confusable");
+  }
+
+  function captureBookmarkIfNeeded() {
+    if (savedBookmark) return; // Keep the original bookmark if user jumps multiple times from search
+    const qTotal = queue.length;
+    const cfTotal = cfQueue.length;
+    let label = "原进度";
+    if (activeTab === "quiz" && qTotal > 0) {
+      label = `原进度（刷题第 ${currentIdx + 1}/${qTotal} 题）`;
+    } else if (activeTab === "confusable" && cfTotal > 0) {
+      label = `原进度（易混淆第 ${cfIdx + 1}/${cfTotal} 题）`;
+    } else if (activeTab === "wrong") {
+      label = "错题本";
+    } else if (activeTab === "custom") {
+      label = "自定义栏目";
+    }
+    savedBookmark = {
+      activeTab,
+      mode,
+      filterPart,
+      filterSection,
+      queue: queue.slice(),
+      currentIdx,
+      cfMode,
+      cfCat,
+      cfQueue: cfQueue.slice(),
+      cfIdx,
+      label
+    };
+  }
+
+  function restoreBookmark() {
+    if (!savedBookmark) return;
+    const bm = savedBookmark;
+    savedBookmark = null;
+    clearTimeout(autoNextTimer);
+
+    mode = bm.mode;
+    filterPart = bm.filterPart;
+    filterSection = bm.filterSection;
+    for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    }
+    populatePartSelects();
+    populateSectionSelect();
+    queue = bm.queue.slice();
+    currentIdx = Math.min(bm.currentIdx, Math.max(0, queue.length - 1));
+    currentAnswer = null;
+
+    cfMode = bm.cfMode;
+    cfCat = bm.cfCat;
+    for (const btn of cfModeGroup.querySelectorAll(".mode-btn")) {
+      btn.classList.toggle("active", btn.dataset.mode === cfMode);
+    }
+    cfSelectCat.value = cfCat;
+    cfQueue = bm.cfQueue.slice();
+    cfIdx = Math.min(bm.cfIdx, Math.max(0, cfQueue.length - 1));
+    cfRevealed = false;
+    cfAnswer = null;
+
+    renderReturnBanners();
+    switchTab(bm.activeTab);
+    showToast(`已返回${bm.label}`);
   }
 
   function hasAnyQuestion(id) {
@@ -2482,6 +2591,8 @@
   }
 
   function setMode(newMode) {
+    savedBookmark = null;
+    renderReturnBanners();
     mode = newMode;
     for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
       btn.classList.toggle("active", btn.dataset.mode === mode);
@@ -2971,6 +3082,8 @@
   }
 
   function setCfMode(newMode) {
+    savedBookmark = null;
+    renderReturnBanners();
     cfMode = newMode;
     for (const btn of cfModeGroup.querySelectorAll(".mode-btn")) {
       btn.classList.toggle("active", btn.dataset.mode === cfMode);
@@ -3227,6 +3340,7 @@
     viewConfusable.classList.toggle("hidden", tab !== "confusable");
     viewWrong.classList.toggle("hidden", tab !== "wrong");
     viewCustom.classList.toggle("hidden", tab !== "custom");
+    renderReturnBanners();
     if (tab === "wrong") {
       renderWrongBook();
     } else if (tab === "custom") {
@@ -3250,6 +3364,8 @@
     setCfMode(btn.dataset.mode);
   });
   cfSelectCat.addEventListener("change", () => {
+    savedBookmark = null;
+    renderReturnBanners();
     cfCat = cfSelectCat.value;
     buildCfQueue();
   });
@@ -3429,6 +3545,8 @@
   });
 
   selectPart.addEventListener("change", () => {
+    savedBookmark = null;
+    renderReturnBanners();
     filterPart = selectPart.value;
     filterSection = "ALL";
     populateSectionSelect();
@@ -3436,6 +3554,8 @@
   });
 
   selectSection.addEventListener("change", () => {
+    savedBookmark = null;
+    renderReturnBanners();
     filterSection = selectSection.value;
     buildQueue();
   });
@@ -3893,6 +4013,7 @@
       }
       updateEditModalPreview();
     }
+    editNoteText.value = getNoteText(id);
     editQuestionModal.classList.add("open");
   }
 
@@ -3940,10 +4061,14 @@
         note,
         updatedAt: Date.now()
       };
+      const newNoteVal = editNoteText.value.trim();
+      if (newNoteVal !== getNoteText(modalEditId)) {
+        notes[modalEditId] = { text: newNoteVal, updatedAt: Date.now() };
+      }
       saveStorage();
       closeEditQuestionModal();
       refreshCurrentViewAfterEdit();
-      showToast("题目修改已保存并同步");
+      showToast("题目与笔记已保存并同步");
       return;
     }
 
@@ -3981,10 +4106,14 @@
         updatedAt: Date.now()
       };
     }
+    const newNoteVal = editNoteText.value.trim();
+    if (newNoteVal !== getNoteText(modalEditId)) {
+      notes[modalEditId] = { text: newNoteVal, updatedAt: Date.now() };
+    }
     saveStorage();
     closeEditQuestionModal();
     refreshCurrentViewAfterEdit();
-    showToast("题目修改已保存并同步");
+    showToast("题目与笔记已保存并同步");
   });
 
   btnRestoreOriginal.addEventListener("click", () => {
@@ -4139,16 +4268,21 @@
     renderSearchResults();
   });
 
+  quizReturnBanner.addEventListener("click", (e) => {
+    if (e.target.closest(".js-return-bookmark")) restoreBookmark();
+  });
+  cfReturnBanner.addEventListener("click", (e) => {
+    if (e.target.closest(".js-return-bookmark")) restoreBookmark();
+  });
+
   btnPracticeSearch.addEventListener("click", () => {
     if (lastSearchTfIds.length === 0) return;
+    captureBookmarkIfNeeded();
     closeSearchModal();
-    mode = "seq";
-    for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
-      btn.classList.toggle("active", btn.dataset.mode === "seq");
-    }
     switchTab("quiz");
     buildQueue(lastSearchTfIds);
-    showToast(`已载入搜索结果中的 ${lastSearchTfIds.length} 道题`);
+    renderReturnBanners();
+    showToast(`已载入搜索结果中的 ${lastSearchTfIds.length} 道题（可随时返回原进度）`);
   });
 
   searchResults.addEventListener("click", (e) => {
@@ -4161,39 +4295,16 @@
     if (jumpBtn) {
       const id = jumpBtn.dataset.id;
       const isCf = jumpBtn.dataset.cf === "1";
+      captureBookmarkIfNeeded();
       closeSearchModal();
       if (isCf) {
-        cfMode = "seq";
-        cfCat = "ALL";
-        for (const btn of cfModeGroup.querySelectorAll(".mode-btn")) {
-          btn.classList.toggle("active", btn.dataset.mode === "seq");
-        }
-        cfSelectCat.value = "ALL";
         switchTab("confusable");
-        buildCfQueue(CONFUSABLE_QUESTIONS.map(x => x.id));
-        const idx = cfQueue.indexOf(id);
-        if (idx !== -1) {
-          cfIdx = idx;
-          saveCfProgress(true);
-          renderConfusable();
-        }
+        buildCfQueue([id]);
+        renderReturnBanners();
       } else {
-        mode = "seq";
-        filterPart = "ALL";
-        filterSection = "ALL";
-        for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
-          btn.classList.toggle("active", btn.dataset.mode === "seq");
-        }
-        populatePartSelects();
-        populateSectionSelect();
         switchTab("quiz");
-        buildQueue(getAllQuestions().map(x => x.id));
-        const idx = queue.indexOf(id);
-        if (idx !== -1) {
-          currentIdx = idx;
-          saveQuizProgress(true);
-          renderQuiz();
-        }
+        buildQueue([id]);
+        renderReturnBanners();
       }
     }
   });
