@@ -2661,7 +2661,7 @@
             <span class="tag tag-soft">${escapeHtml(q.s)} · 第 ${q.n} 题</span>
             ${(q.isCustom || String(q.id).startsWith("c_")) ? '<span class="custom-badge">自定义</span>' : ""}
           </div>
-          <div class="stat-badges">${badgeHtml}</div>
+          <div class="stat-badges">${answered ? badgeHtml : ""}</div>
         </div>
         <p class="question-text">${escapeHtml(q.q)}</p>
         <div class="choice-grid">
@@ -3501,7 +3501,7 @@
             <span class="tag tag-soft">${item.type === "blank" ? "挖空记忆" : "易混选词"}</span>
             ${(item.isCustom || String(item.id).startsWith("ccf_")) ? '<span class="custom-badge">自定义</span>' : ""}
           </div>
-          <div class="stat-badges">${badgeHtml}</div>
+          <div class="stat-badges">${answered ? badgeHtml : ""}</div>
         </div>
         <p class="question-text">${promptHtml}</p>
         ${controlsHtml}
