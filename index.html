@@ -3590,6 +3590,7 @@
     setCfMode(btn.dataset.mode);
   });
   cfSelectCat.addEventListener("change", () => {
+    cfSelectCat.blur();
     savedBookmark = null;
     renderReturnBanners();
     cfCat = cfSelectCat.value;
@@ -3774,6 +3775,7 @@
   });
 
   selectPart.addEventListener("change", () => {
+    selectPart.blur();
     savedBookmark = null;
     renderReturnBanners();
     filterPart = selectPart.value;
@@ -3785,6 +3787,7 @@
   });
 
   selectChapter.addEventListener("change", () => {
+    selectChapter.blur();
     savedBookmark = null;
     renderReturnBanners();
     filterChapter = selectChapter.value;
@@ -3794,6 +3797,7 @@
   });
 
   selectSection.addEventListener("change", () => {
+    selectSection.blur();
     savedBookmark = null;
     renderReturnBanners();
     filterSection = selectSection.value;
@@ -3801,6 +3805,7 @@
   });
 
   toggleAutoNext.addEventListener("change", () => {
+    toggleAutoNext.blur();
     settings.autoNext = toggleAutoNext.checked;
     saveStorage();
   });
@@ -3861,33 +3866,48 @@
     showToast(`已载入 ${tfItems.length} 道判断错题开始专攻`);
   });
 
-  // Keyboard shortcuts
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
+  // Keyboard shortcuts (capture phase + iPadOS/WebKit compatible)
+  window.addEventListener("keydown", (e) => {
+    const key = e.key || "";
+    const code = e.code || "";
+    const kc = e.keyCode || 0;
+    const isLeft = key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || kc === 37;
+    const isRight = key === "ArrowRight" || key === "Right" || code === "ArrowRight" || kc === 39;
+    const isSpace = key === " " || key === "Spacebar" || code === "Space" || kc === 32;
+    const isEnter = key === "Enter" || code === "Enter" || kc === 13;
+
+    if (key === "Escape" || kc === 27) {
       if (addCfModal.classList.contains("open")) { closeAddCfModal(); return; }
       if (searchModal.classList.contains("open")) { closeSearchModal(); return; }
       if (editQuestionModal.classList.contains("open")) { closeEditQuestionModal(); return; }
       if (backupModal.classList.contains("open")) { closeModal(); return; }
     }
     if (backupModal.classList.contains("open") || editQuestionModal.classList.contains("open") || searchModal.classList.contains("open") || addCfModal.classList.contains("open")) return;
-    const tag = (e.target && e.target.tagName) || "";
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    const target = e.target;
+    const tag = (target && target.tagName) ? target.tagName.toUpperCase() : "";
+    if (tag === "TEXTAREA") return;
+    if (tag === "INPUT") {
+      const itype = (target.type || "text").toLowerCase();
+      if (itype !== "checkbox" && itype !== "radio" && itype !== "button") return;
+    }
 
     if (activeTab === "quiz") {
       if (queue.length === 0) return;
       if (currentAnswer === null) {
-        if (e.key === "1" || e.key === "ArrowLeft") {
+        if (key === "1" || isLeft) {
           e.preventDefault();
           submitChoice(true);
-        } else if (e.key === "2" || e.key === "ArrowRight") {
+        } else if (key === "2" || isRight) {
           e.preventDefault();
           submitChoice(false);
         }
       } else {
-        if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") {
+        if (isSpace || isEnter || isRight) {
           e.preventDefault();
           goNext();
-        } else if (e.key === "ArrowLeft") {
+        } else if (isLeft) {
           e.preventDefault();
           goPrev();
         }
@@ -3897,35 +3917,41 @@
       const item = CF_MAP.get(cfQueue[cfIdx]);
       if (cfAnswer === null) {
         if (item.type === "choice") {
-          const idx = ["1", "2", "3", "4"].indexOf(e.key);
+          const idx = ["1", "2", "3", "4"].indexOf(key);
           if (idx !== -1 && idx < item.opts.length) {
             e.preventDefault();
             submitCfChoice(item.opts[idx]);
+          } else if (item.opts.length === 2 && isLeft) {
+            e.preventDefault();
+            submitCfChoice(item.opts[0]);
+          } else if (item.opts.length === 2 && isRight) {
+            e.preventDefault();
+            submitCfChoice(item.opts[1]);
           }
         } else {
-          if (e.key === " " && !cfRevealed) {
+          if (isSpace && !cfRevealed) {
             e.preventDefault();
             cfRevealed = true;
             renderConfusable();
-          } else if (e.key === "1" || e.key === "ArrowLeft") {
+          } else if (key === "1" || isLeft) {
             e.preventDefault();
             submitCfBlank(true);
-          } else if (e.key === "2" || e.key === "ArrowRight") {
+          } else if (key === "2" || isRight) {
             e.preventDefault();
             submitCfBlank(false);
           }
         }
       } else {
-        if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") {
+        if (isSpace || isEnter || isRight) {
           e.preventDefault();
           cfNext();
-        } else if (e.key === "ArrowLeft") {
+        } else if (isLeft) {
           e.preventDefault();
           cfPrev();
         }
       }
     }
-  });
+  }, true);
 
   // Cloud Auto Sync Engine (Gitee Gist / GitHub Gist)
   const SYNC_FILENAME = "xiaohei_paikeng_sync.json";
