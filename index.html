@@ -1315,6 +1315,7 @@
       </div>
       <div class="filter-row">
         <select class="select-box" id="selectPart" aria-label="按篇筛选"></select>
+        <select class="select-box" id="selectChapter" aria-label="按章筛选"></select>
         <select class="select-box" id="selectSection" aria-label="按小节筛选"></select>
         <label class="toggle-label">
           <input type="checkbox" id="toggleAutoNext">
@@ -1748,7 +1749,7 @@
   let savedBookmark = null; // snapshot before jumping from search so user can return to exact progress
   let progressState = {
     activeTab: "quiz",
-    quiz: { mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} },
+    quiz: { mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {} },
     cf: { mode: "seq", cat: "ALL", positions: {} }
   };
   let editingNoteId = null;
@@ -1765,6 +1766,7 @@
   let activeTab = "quiz"; // "quiz" | "wrong" | "custom"
   let mode = "seq"; // "seq" | "rand" | "wrong" | "freq"
   let filterPart = "ALL";
+  let filterChapter = "ALL";
   let filterSection = "ALL";
   let queue = [];
   let currentIdx = 0;
@@ -1942,6 +1944,7 @@
   const syncStatusText = document.getElementById("syncStatusText");
   const modeGroup = document.getElementById("modeGroup");
   const selectPart = document.getElementById("selectPart");
+  const selectChapter = document.getElementById("selectChapter");
   const selectSection = document.getElementById("selectSection");
   const toggleAutoNext = document.getElementById("toggleAutoNext");
   const progressWrap = document.getElementById("progressWrap");
@@ -2059,7 +2062,7 @@
             const ps = parsed.progressState;
             progressState.activeTab = ps.activeTab || "quiz";
             if (ps.quiz && typeof ps.quiz === "object") {
-              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} }, ps.quiz);
+              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {} }, ps.quiz);
               if (!progressState.quiz.positions || typeof progressState.quiz.positions !== "object") progressState.quiz.positions = {};
             }
             if (ps.cf && typeof ps.cf === "object") {
@@ -2218,13 +2221,14 @@
   }
 
   function getQuizPosKey() {
-    return `${mode}|${filterPart}|${filterSection}`;
+    return `${mode}|${filterPart}|${filterChapter}|${filterSection}`;
   }
 
   function saveQuizProgress(skipCloud) {
     if (savedBookmark) return; // Do not overwrite main progress while viewing search jump
     progressState.quiz.mode = mode;
     progressState.quiz.filterPart = filterPart;
+    progressState.quiz.filterChapter = filterChapter;
     progressState.quiz.filterSection = filterSection;
     if (queue.length > 0 && queue[currentIdx]) {
       progressState.quiz.positions[getQuizPosKey()] = queue[currentIdx];
@@ -2281,6 +2285,7 @@
       activeTab,
       mode,
       filterPart,
+      filterChapter,
       filterSection,
       queue: queue.slice(),
       currentIdx,
@@ -2300,11 +2305,13 @@
 
     mode = bm.mode;
     filterPart = bm.filterPart;
+    filterChapter = bm.filterChapter || "ALL";
     filterSection = bm.filterSection;
     for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
       btn.classList.toggle("active", btn.dataset.mode === mode);
     }
     populatePartSelects();
+    populateChapterSelect();
     populateSectionSelect();
     queue = bm.queue.slice();
     currentIdx = Math.min(bm.currentIdx, Math.max(0, queue.length - 1));
@@ -2379,29 +2386,63 @@
     wbPart = wbPartEl.value;
   }
 
+  function populateChapterSelect() {
+    const allQ = getAllQuestions();
+    selectChapter.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "ALL";
+    optAll.textContent = "全部章节";
+    selectChapter.appendChild(optAll);
+
+    const chapOrder = [];
+    const chapCounts = new Map();
+    for (const q of allQ) {
+      if (filterPart !== "ALL" && q.p !== filterPart) continue;
+      const ck = q.p + "||" + q.c;
+      if (!chapCounts.has(ck)) chapOrder.push({ ck, p: q.p, c: q.c });
+      chapCounts.set(ck, (chapCounts.get(ck) || 0) + 1);
+    }
+    for (const item of chapOrder) {
+      const opt = document.createElement("option");
+      opt.value = item.ck;
+      opt.textContent = filterPart === "ALL"
+        ? `${item.c}（${chapCounts.get(item.ck)}题）`
+        : `${item.c}（${chapCounts.get(item.ck)}题）`;
+      selectChapter.appendChild(opt);
+    }
+    if ([...selectChapter.options].some(o => o.value === filterChapter)) {
+      selectChapter.value = filterChapter;
+    } else {
+      filterChapter = "ALL";
+      selectChapter.value = "ALL";
+    }
+  }
+
   function populateSectionSelect() {
     const allQ = getAllQuestions();
     selectSection.innerHTML = "";
     const optAll = document.createElement("option");
     optAll.value = "ALL";
-    optAll.textContent = filterPart === CUSTOM_PART ? "全部自定义类目" : "全部小节";
+    optAll.textContent = "全部小节";
     selectSection.appendChild(optAll);
 
-    const targetParts = filterPart === "ALL" ? PARTS : [filterPart];
+    const secOrder = [];
     const secCounts = new Map();
     for (const q of allQ) {
       if (filterPart !== "ALL" && q.p !== filterPart) continue;
+      const ck = q.p + "||" + q.c;
+      if (filterChapter !== "ALL" && ck !== filterChapter) continue;
       const k = q.c + " / " + q.s;
+      if (!secCounts.has(k)) secOrder.push({ k, s: q.s });
       secCounts.set(k, (secCounts.get(k) || 0) + 1);
     }
-    for (const p of targetParts) {
-      const secs = PART_SECTIONS.get(p) || [];
-      for (const secKey of secs) {
-        const opt = document.createElement("option");
-        opt.value = secKey;
-        opt.textContent = `${secKey}（${secCounts.get(secKey) || 0}题）`;
-        selectSection.appendChild(opt);
-      }
+    for (const item of secOrder) {
+      const opt = document.createElement("option");
+      opt.value = item.k;
+      opt.textContent = filterChapter === "ALL"
+        ? `${item.k}（${secCounts.get(item.k)}题）`
+        : `${item.s}（${secCounts.get(item.k)}题）`;
+      selectSection.appendChild(opt);
     }
     if ([...selectSection.options].some(o => o.value === filterSection)) {
       selectSection.value = filterSection;
@@ -2431,6 +2472,7 @@
     }
     let list = getAllQuestions().filter(q => {
       if (filterPart !== "ALL" && q.p !== filterPart) return false;
+      if (filterChapter !== "ALL" && (q.p + "||" + q.c) !== filterChapter) return false;
       if (filterSection !== "ALL" && (q.c + " / " + q.s) !== filterSection) return false;
       return true;
     });
@@ -3132,6 +3174,7 @@
     saveStorage();
     rebuildIndex();
     populatePartSelects();
+    populateChapterSelect();
     populateSectionSelect();
     buildQueue();
     renderCustomManager();
@@ -3594,7 +3637,9 @@
     const items = getFilteredCustomItems();
     if (items.length === 0) return;
     filterPart = customFilterPartVal;
+    filterChapter = "ALL";
     populatePartSelects();
+    populateChapterSelect();
     filterSection = customFilterCatVal;
     populateSectionSelect();
     mode = "seq";
@@ -3654,6 +3699,7 @@
       saveStorage();
       rebuildIndex();
       populatePartSelects();
+      populateChapterSelect();
       populateSectionSelect();
       buildQueue();
       renderCustomManager();
@@ -3671,6 +3717,17 @@
     savedBookmark = null;
     renderReturnBanners();
     filterPart = selectPart.value;
+    filterChapter = "ALL";
+    filterSection = "ALL";
+    populateChapterSelect();
+    populateSectionSelect();
+    buildQueue();
+  });
+
+  selectChapter.addEventListener("change", () => {
+    savedBookmark = null;
+    renderReturnBanners();
+    filterChapter = selectChapter.value;
     filterSection = "ALL";
     populateSectionSelect();
     buildQueue();
@@ -4033,6 +4090,7 @@
           saveStorage(true);
           rebuildIndex();
           populatePartSelects();
+          populateChapterSelect();
           populateSectionSelect();
           populateCustomFormDropdowns(customPartSelect.value, customSectionSelect.value);
           populateCfCats();
@@ -4745,6 +4803,7 @@
         saveStorage();
         rebuildIndex();
         populatePartSelects();
+        populateChapterSelect();
         populateSectionSelect();
         closeModal();
         if (activeTab === "wrong") renderWrongBook();
@@ -4838,6 +4897,7 @@
   rebuildIndex();
   mode = progressState.quiz.mode || "seq";
   filterPart = progressState.quiz.filterPart || "ALL";
+  filterChapter = progressState.quiz.filterChapter || "ALL";
   filterSection = progressState.quiz.filterSection || "ALL";
   for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
     btn.classList.toggle("active", btn.dataset.mode === mode);
@@ -4848,6 +4908,7 @@
     btn.classList.toggle("active", btn.dataset.mode === cfMode);
   }
   populatePartSelects();
+  populateChapterSelect();
   populateSectionSelect();
   populateCustomFormDropdowns(BUILTIN_PARTS[0], null);
   populateCfCats();
