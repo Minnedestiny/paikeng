@@ -2604,7 +2604,7 @@
       `;
     }
 
-    const showMasterBtn = rec.wrong > 0;
+    const showMasterBtn = rec.wrong > 0 && !rec.mastered;
     const masterBtnText = rec.mastered ? "已掌握（点此取消）" : "标记已掌握";
 
     quizCardArea.innerHTML = `
@@ -3430,7 +3430,7 @@
       `;
     }
 
-    const showMasterBtn = rec.wrong > 0;
+    const showMasterBtn = rec.wrong > 0 && !rec.mastered;
     const masterBtnText = rec.mastered ? "已掌握（点此取消）" : "标记已掌握";
 
     cfCardArea.innerHTML = `
