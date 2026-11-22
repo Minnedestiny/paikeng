@@ -2100,7 +2100,7 @@
           </button>
         </div>
         ${feedbackHtml}
-        ${renderNoteSectionHtml(q.id)}
+        ${answered ? renderNoteSectionHtml(q.id) : ""}
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnPrev" ${currentIdx === 0 ? "disabled" : ""}>上一题</button>
@@ -2889,7 +2889,7 @@
         <p class="question-text">${promptHtml}</p>
         ${controlsHtml}
         ${feedbackHtml}
-        ${renderNoteSectionHtml(item.id)}
+        ${answered ? renderNoteSectionHtml(item.id) : ""}
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnCfPrev" ${cfIdx === 0 ? "disabled" : ""}>上一题</button>
