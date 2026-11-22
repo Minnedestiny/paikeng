@@ -1139,6 +1139,111 @@
     background: var(--primary-soft);
   }
 
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .modal-search {
+    max-width: 640px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+  }
+  .search-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .search-head .text-input {
+    flex: 1;
+    min-width: 0;
+    background: #fff;
+    font-size: 15px;
+    padding: 9px 12px;
+  }
+  .search-scope-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .search-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .search-pill {
+    border: 1px solid var(--border);
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .search-pill.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+  .search-meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .search-results {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 2px;
+    min-height: 180px;
+  }
+  .search-item {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 12px 14px;
+    background: var(--surface-soft);
+  }
+  .search-item-q {
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: var(--text);
+    margin: 6px 0;
+    word-break: break-word;
+  }
+  .search-item-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  mark.kw-hl {
+    background: #fef08a;
+    color: #1c222d;
+    padding: 0 2px;
+    border-radius: 3px;
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 640px) {
@@ -1173,7 +1278,10 @@
         自定义 <span class="count-pill count-pill-primary" id="navCustomCount">0</span>
       </button>
     </nav>
-    <button type="button" class="icon-btn" id="btnBackup"><span class="sync-dot" id="syncDot"></span>云同步 / 备份</button>
+    <div class="topbar-right">
+      <button type="button" class="icon-btn" id="btnOpenSearch" title="搜索题库与笔记">搜索</button>
+      <button type="button" class="icon-btn" id="btnBackup"><span class="sync-dot" id="syncDot"></span>云同步 / 备份</button>
+    </div>
   </div>
 </header>
 
@@ -1414,6 +1522,94 @@
   </div>
 </div>
 
+<!-- Global Search Modal -->
+<div class="modal-backdrop" id="searchModal" role="dialog" aria-modal="true" aria-labelledby="searchInput">
+  <div class="modal modal-search">
+    <div class="search-head">
+      <input type="text" class="text-input" id="searchInput" placeholder="输入关键词搜索题库、正确改法或个人笔记…">
+      <button type="button" class="btn" id="btnCloseSearch">关闭</button>
+    </div>
+    <div class="search-scope-row">
+      <div class="search-pills" id="searchScopeGroup">
+        <button type="button" class="search-pill active" data-scope="all">全部（题库+笔记）</button>
+        <button type="button" class="search-pill" data-scope="question">仅搜题库</button>
+        <button type="button" class="search-pill" data-scope="note">仅搜笔记</button>
+        <button type="button" class="search-pill" data-scope="wrong">仅搜错题</button>
+      </div>
+    </div>
+    <div class="search-meta-bar">
+      <span id="searchCountText">输入关键词开始检索（支持搜原书题、自定义题、易混淆与个人笔记）</span>
+      <button type="button" class="btn btn-sm btn-primary hidden" id="btnPracticeSearch">刷搜出的判断题</button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Edit Any Question Modal -->
+<div class="modal-backdrop" id="editQuestionModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+  <div class="modal modal-wide">
+    <h3 class="modal-title" id="editModalTitle">编辑题目</h3>
+    <p class="modal-desc" id="editModalMeta"></p>
+
+    <!-- True/False question fields -->
+    <div id="editTfFields">
+      <div class="form-field">
+        <label>题目正误</label>
+        <div class="radio-pill-group">
+          <button type="button" class="radio-pill active-false" id="editTypeFalse">✗ 错误（设坑题）</button>
+          <button type="button" class="radio-pill" id="editTypeTrue">✓ 正确（真表述）</button>
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="editQText">题目表述</label>
+        <textarea class="text-area" id="editQText"></textarea>
+      </div>
+      <div id="editPitWrap">
+        <div class="form-field">
+          <label for="editWrongTerms">坑词（原句错词） <span class="form-hint">选填，多词用；隔开</span></label>
+          <input type="text" class="text-input" id="editWrongTerms" placeholder="例如：十九大 或 根脉；魂脉">
+        </div>
+        <div class="form-field">
+          <label for="editFixText">正确改法 / 解析</label>
+          <input type="text" class="text-input" id="editFixText" placeholder="例如：十八大">
+        </div>
+        <div class="preview-box hidden" id="editPreviewBox">
+          <div class="preview-label">排坑预览：</div>
+          <div id="editPreviewText"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confusable question fields -->
+    <div id="editCfFields" class="hidden">
+      <div class="form-field">
+        <label for="editCfPre">空缺前半句</label>
+        <input type="text" class="text-input" id="editCfPre">
+      </div>
+      <div class="form-field">
+        <label for="editCfAns">空缺答案 / 正确选项</label>
+        <input type="text" class="text-input" id="editCfAns">
+      </div>
+      <div class="form-field">
+        <label for="editCfPost">空缺后半句</label>
+        <input type="text" class="text-input" id="editCfPost">
+      </div>
+      <div class="form-field">
+        <label for="editCfNote">记忆提示 <span class="form-hint">（选填）</span></label>
+        <input type="text" class="text-input" id="editCfNote">
+      </div>
+    </div>
+
+    <div class="modal-row" style="justify-content:space-between;align-items:center;">
+      <button type="button" class="btn btn-danger hidden" id="btnRestoreOriginal">恢复原题</button>
+      <div style="display:flex;gap:8px;margin-left:auto;">
+        <button type="button" class="btn" id="btnCancelEditModal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnSaveEditModal">保存修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1449,6 +1645,10 @@
   let deletedCustomIds = []; // track deleted custom IDs for clean cloud merge
   let customCategories = { parts: [], sections: {} }; // user-defined parts & sections per part
   let notes = {}; // { [id]: { text, updatedAt } }
+  let questionOverrides = {}; // { [id]: { q, ok, r, wStr, fix, updatedAt } or { pre, ans, post, full, note, updatedAt } or { _restored: true, updatedAt } }
+  let modalEditId = null;
+  let modalEditIsCf = false;
+  let modalEditIsOk = false;
   let progressState = {
     activeTab: "quiz",
     quiz: { mode: "seq", filterPart: "ALL", filterSection: "ALL", positions: {} },
@@ -1497,8 +1697,41 @@
   let customFilterCatVal = "ALL";
   let customSearchVal = "";
 
+  function getEffectiveBuiltin(q) {
+    const ov = questionOverrides[q.id];
+    if (ov && !ov._restored) {
+      return Object.assign({}, q, {
+        q: ov.q !== undefined ? ov.q : q.q,
+        ok: ov.ok !== undefined ? ov.ok : q.ok,
+        r: Array.isArray(ov.r) ? ov.r : q.r,
+        wStr: ov.wStr,
+        fix: ov.fix !== undefined ? ov.fix : q.fix,
+        isEdited: true
+      });
+    }
+    return q;
+  }
+
+  function getEffectiveConfusable(item) {
+    const ov = questionOverrides[item.id];
+    if (ov && !ov._restored) {
+      const pre = ov.pre !== undefined ? ov.pre : item.pre;
+      const ans = ov.ans !== undefined ? ov.ans : item.ans;
+      const post = ov.post !== undefined ? ov.post : item.post;
+      return Object.assign({}, item, {
+        pre,
+        ans,
+        post,
+        full: ov.full !== undefined ? ov.full : (pre + ans + post),
+        note: ov.note !== undefined ? ov.note : item.note,
+        isEdited: true
+      });
+    }
+    return item;
+  }
+
   function getAllQuestions() {
-    return QUESTIONS.concat(customQuestions);
+    return QUESTIONS.map(getEffectiveBuiltin).concat(customQuestions);
   }
 
   function computeRanges(qText, wrongStr) {
@@ -1528,6 +1761,11 @@
   function rebuildIndex() {
     const allQ = getAllQuestions();
     Q_MAP = new Map(allQ.map(q => [q.id, q]));
+    CF_MAP.clear();
+    for (const rawCf of CONFUSABLE_QUESTIONS) {
+      const eff = getEffectiveConfusable(rawCf);
+      CF_MAP.set(eff.id, eff);
+    }
     PARTS = [];
     PART_SECTIONS = new Map();
     for (const q of allQ) {
@@ -1631,6 +1869,37 @@
   const btnConfirmReset = document.getElementById("btnConfirmReset");
   const btnCloseModal = document.getElementById("btnCloseModal");
   const toastEl = document.getElementById("toast");
+  const btnOpenSearch = document.getElementById("btnOpenSearch");
+  const searchModal = document.getElementById("searchModal");
+  const searchInput = document.getElementById("searchInput");
+  const btnCloseSearch = document.getElementById("btnCloseSearch");
+  const searchScopeGroup = document.getElementById("searchScopeGroup");
+  const searchCountText = document.getElementById("searchCountText");
+  const btnPracticeSearch = document.getElementById("btnPracticeSearch");
+  const searchResults = document.getElementById("searchResults");
+  let searchScope = "all"; // "all" | "question" | "note" | "wrong"
+  let lastSearchTfIds = [];
+
+  const editQuestionModal = document.getElementById("editQuestionModal");
+  const editModalTitle = document.getElementById("editModalTitle");
+  const editModalMeta = document.getElementById("editModalMeta");
+  const editTfFields = document.getElementById("editTfFields");
+  const editTypeFalse = document.getElementById("editTypeFalse");
+  const editTypeTrue = document.getElementById("editTypeTrue");
+  const editQText = document.getElementById("editQText");
+  const editPitWrap = document.getElementById("editPitWrap");
+  const editWrongTerms = document.getElementById("editWrongTerms");
+  const editFixText = document.getElementById("editFixText");
+  const editPreviewBox = document.getElementById("editPreviewBox");
+  const editPreviewText = document.getElementById("editPreviewText");
+  const editCfFields = document.getElementById("editCfFields");
+  const editCfPre = document.getElementById("editCfPre");
+  const editCfAns = document.getElementById("editCfAns");
+  const editCfPost = document.getElementById("editCfPost");
+  const editCfNote = document.getElementById("editCfNote");
+  const btnRestoreOriginal = document.getElementById("btnRestoreOriginal");
+  const btnCancelEditModal = document.getElementById("btnCancelEditModal");
+  const btnSaveEditModal = document.getElementById("btnSaveEditModal");
 
   function loadStorage() {
     try {
@@ -1649,6 +1918,9 @@
           }
           if (parsed.notes && typeof parsed.notes === "object") {
             notes = parsed.notes;
+          }
+          if (parsed.questionOverrides && typeof parsed.questionOverrides === "object") {
+            questionOverrides = parsed.questionOverrides;
           }
           if (parsed.progressState && typeof parsed.progressState === "object") {
             const ps = parsed.progressState;
@@ -1693,7 +1965,7 @@
 
   function saveStorage(skipAutoSync) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, notes, progressState, settings }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, notes, questionOverrides, progressState, settings }));
     } catch (e) {
       // Ignore storage quota / sandbox restrictions
     }
@@ -2104,6 +2376,7 @@
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnPrev" ${currentIdx === 0 ? "disabled" : ""}>上一题</button>
+            <button type="button" class="btn" id="btnEditCurrentQuiz">编辑</button>
             ${showMasterBtn ? `<button type="button" class="btn ${rec.mastered ? "btn-mastered" : ""}" id="btnToggleMaster">${masterBtnText}</button>` : ""}
           </div>
           <div class="footer-right">
@@ -2133,6 +2406,8 @@
         renderQuiz();
       });
     }
+    const btnEditQ = document.getElementById("btnEditCurrentQuiz");
+    if (btnEditQ) btnEditQ.addEventListener("click", () => openEditQuestionModal(q.id, false));
     bindNoteHandlers(quizCardArea, q.id, renderQuiz);
   }
 
@@ -2216,7 +2491,7 @@
 
   // Wrong Book rendering (unified: built-in + custom + confusable)
   function getUnifiedWrongSource() {
-    const cfMapped = CONFUSABLE_QUESTIONS.map((item, idx) => ({
+    const cfMapped = CONFUSABLE_QUESTIONS.map((rawItem, idx) => { const item = getEffectiveConfusable(rawItem); return ({
       id: item.id,
       isCf: true,
       p: CONFUSABLE_PART,
@@ -2224,7 +2499,7 @@
       s: item.cat,
       n: idx + 1,
       cf: item
-    }));
+    }); });
     return getAllQuestions().concat(cfMapped);
   }
 
@@ -2331,9 +2606,12 @@
           ${getNoteText(q.id) ? `<div class="wb-note-strip"><strong>笔记：</strong>${escapeHtml(getNoteText(q.id))}</div>` : ""}
           <div class="wb-item-foot">
             <span>所属栏目：${escapeHtml(q.p)}</span>
-            <button type="button" class="btn ${r.mastered ? "" : "btn-mastered"} js-wb-master" data-id="${q.id}">
-              ${r.mastered ? "移回待攻克" : "标记已掌握"}
-            </button>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button type="button" class="btn btn-sm js-wb-edit" data-id="${q.id}" data-cf="${q.isCf ? "1" : "0"}">编辑</button>
+              <button type="button" class="btn btn-sm ${r.mastered ? "" : "btn-mastered"} js-wb-master" data-id="${q.id}">
+                ${r.mastered ? "移回待攻克" : "标记已掌握"}
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -2893,6 +3171,7 @@
         <div class="card-footer">
           <div class="footer-left">
             <button type="button" class="btn" id="btnCfPrev" ${cfIdx === 0 ? "disabled" : ""}>上一题</button>
+            <button type="button" class="btn" id="btnEditCurrentCf">编辑</button>
             ${showMasterBtn ? `<button type="button" class="btn ${rec.mastered ? "btn-mastered" : ""}" id="btnCfMaster">${masterBtnText}</button>` : ""}
           </div>
           <div class="footer-right">
@@ -2930,6 +3209,8 @@
         renderConfusable();
       });
     }
+    const btnEditCf = document.getElementById("btnEditCurrentCf");
+    if (btnEditCf) btnEditCf.addEventListener("click", () => openEditQuestionModal(item.id, true));
     bindNoteHandlers(cfCardArea, item.id, renderConfusable);
   }
 
@@ -3178,6 +3459,11 @@
   });
 
   wbList.addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".js-wb-edit");
+    if (editBtn) {
+      openEditQuestionModal(editBtn.dataset.id, editBtn.dataset.cf === "1");
+      return;
+    }
     const btn = e.target.closest(".js-wb-master");
     if (!btn) return;
     toggleMastered(btn.dataset.id);
@@ -3210,7 +3496,12 @@
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
-    if (backupModal.classList.contains("open")) return;
+    if (e.key === "Escape") {
+      if (searchModal.classList.contains("open")) { closeSearchModal(); return; }
+      if (editQuestionModal.classList.contains("open")) { closeEditQuestionModal(); return; }
+      if (backupModal.classList.contains("open")) { closeModal(); return; }
+    }
+    if (backupModal.classList.contains("open") || editQuestionModal.classList.contains("open") || searchModal.classList.contains("open")) return;
     const tag = (e.target && e.target.tagName) || "";
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
 
@@ -3351,6 +3642,18 @@
       }
     }
 
+    // 2.55 Merge questionOverrides (latest updatedAt wins)
+    if (remote.questionOverrides && typeof remote.questionOverrides === "object") {
+      for (const id in remote.questionOverrides) {
+        const rov = remote.questionOverrides[id];
+        if (!rov || typeof rov !== "object") continue;
+        const lov = questionOverrides[id];
+        if (!lov || (rov.updatedAt || 0) >= (lov.updatedAt || 0)) {
+          questionOverrides[id] = rov;
+        }
+      }
+    }
+
     // 2.6 Merge progress positions if local doesn't have one yet
     if (remote.progressState && typeof remote.progressState === "object") {
       if (remote.progressState.quiz && remote.progressState.quiz.positions) {
@@ -3471,6 +3774,7 @@
         deletedCustomIds,
         customCategories,
         notes,
+        questionOverrides,
         progressState,
         settings
       });
@@ -3523,6 +3827,377 @@
     return Promise.resolve();
   }
 
+  // Edit Any Question Modal Logic (built-in, custom, and confusable)
+  function setEditModalType(isOk) {
+    modalEditIsOk = isOk;
+    editTypeFalse.className = "radio-pill" + (!isOk ? " active-false" : "");
+    editTypeTrue.className = "radio-pill" + (isOk ? " active-true" : "");
+    editPitWrap.classList.toggle("hidden", isOk);
+    updateEditModalPreview();
+  }
+
+  function updateEditModalPreview() {
+    if (modalEditIsCf || modalEditIsOk) {
+      editPreviewBox.classList.add("hidden");
+      return;
+    }
+    const qText = editQText.value.trim();
+    const wStr = editWrongTerms.value.trim();
+    const fixStr = editFixText.value.trim();
+    if (!qText || (!wStr && !fixStr)) {
+      editPreviewBox.classList.add("hidden");
+      return;
+    }
+    const ranges = computeRanges(qText, wStr);
+    const fakeItem = { q: qText, ok: false, r: ranges };
+    editPreviewText.innerHTML =
+      renderAnnotatedQuestion(fakeItem) +
+      (fixStr ? ` <strong style="color:#14532d;">【${escapeHtml(fixStr)}】</strong>` : "");
+    editPreviewBox.classList.remove("hidden");
+  }
+
+  function openEditQuestionModal(id, isCf) {
+    modalEditId = id;
+    modalEditIsCf = !!isCf;
+    const isBuiltin = isCf ? CONFUSABLE_QUESTIONS.some(x => x.id === id) : QUESTIONS.some(x => x.id === id);
+    const hasOverride = !!(questionOverrides[id] && !questionOverrides[id]._restored);
+    btnRestoreOriginal.classList.toggle("hidden", !(isBuiltin && hasOverride));
+
+    if (isCf) {
+      const item = CF_MAP.get(id);
+      if (!item) return;
+      editModalTitle.textContent = "编辑易混淆考点";
+      editModalMeta.textContent = `${item.cat} · ${item.type === "blank" ? "挖空记忆" : "易混选词"}`;
+      editTfFields.classList.add("hidden");
+      editCfFields.classList.remove("hidden");
+      editCfPre.value = item.pre || "";
+      editCfAns.value = item.ans || "";
+      editCfPost.value = item.post || "";
+      editCfNote.value = item.note || "";
+    } else {
+      const q = Q_MAP.get(id);
+      if (!q) return;
+      editModalTitle.textContent = isBuiltin ? "编辑原始题库题目" : "编辑自定义题目";
+      editModalMeta.textContent = `${q.c} / ${q.s} · 第 ${q.n} 题`;
+      editCfFields.classList.add("hidden");
+      editTfFields.classList.remove("hidden");
+      editQText.value = q.q || "";
+      setEditModalType(!!q.ok);
+      if (!q.ok) {
+        const derivedW = q.wStr !== undefined ? q.wStr : (q.r || []).map(([s, end]) => q.q.slice(s, end)).join("；");
+        editWrongTerms.value = derivedW;
+        editFixText.value = q.fix || "";
+      } else {
+        editWrongTerms.value = "";
+        editFixText.value = "";
+      }
+      updateEditModalPreview();
+    }
+    editQuestionModal.classList.add("open");
+  }
+
+  function closeEditQuestionModal() {
+    editQuestionModal.classList.remove("open");
+    modalEditId = null;
+  }
+
+  function refreshCurrentViewAfterEdit() {
+    rebuildIndex();
+    if (activeTab === "wrong") renderWrongBook();
+    else if (activeTab === "custom") renderCustomManager();
+    else if (activeTab === "confusable") renderConfusable();
+    else renderQuiz();
+    if (searchModal.classList.contains("open")) renderSearchResults();
+  }
+
+  editTypeFalse.addEventListener("click", () => setEditModalType(false));
+  editTypeTrue.addEventListener("click", () => setEditModalType(true));
+  editQText.addEventListener("input", updateEditModalPreview);
+  editWrongTerms.addEventListener("input", updateEditModalPreview);
+  editFixText.addEventListener("input", updateEditModalPreview);
+  btnCancelEditModal.addEventListener("click", closeEditQuestionModal);
+  editQuestionModal.addEventListener("click", (e) => {
+    if (e.target === editQuestionModal) closeEditQuestionModal();
+  });
+
+  btnSaveEditModal.addEventListener("click", () => {
+    if (!modalEditId) return;
+    if (modalEditIsCf) {
+      const pre = editCfPre.value;
+      const ans = editCfAns.value.trim();
+      const post = editCfPost.value;
+      const note = editCfNote.value.trim();
+      if (!ans) {
+        showToast("请填写空缺答案 / 正确选项");
+        editCfAns.focus();
+        return;
+      }
+      questionOverrides[modalEditId] = {
+        pre,
+        ans,
+        post,
+        full: pre + ans + post,
+        note,
+        updatedAt: Date.now()
+      };
+      saveStorage();
+      closeEditQuestionModal();
+      refreshCurrentViewAfterEdit();
+      showToast("题目修改已保存并同步");
+      return;
+    }
+
+    const qText = editQText.value.trim();
+    const wrongStr = editWrongTerms.value.trim();
+    const fixText = editFixText.value.trim();
+    if (!qText) {
+      showToast("题目表述不能为空");
+      editQText.focus();
+      return;
+    }
+    if (!modalEditIsOk && !fixText) {
+      showToast("设坑题请填写正确改法 / 解析");
+      editFixText.focus();
+      return;
+    }
+    const ranges = modalEditIsOk ? [] : computeRanges(qText, wrongStr);
+    const customIdx = customQuestions.findIndex(x => x.id === modalEditId);
+    if (customIdx !== -1) {
+      customQuestions[customIdx] = Object.assign({}, customQuestions[customIdx], {
+        q: qText,
+        ok: modalEditIsOk,
+        r: ranges,
+        wStr: modalEditIsOk ? "" : wrongStr,
+        fix: modalEditIsOk ? "" : fixText,
+        updatedAt: Date.now()
+      });
+    } else {
+      questionOverrides[modalEditId] = {
+        q: qText,
+        ok: modalEditIsOk,
+        r: ranges,
+        wStr: modalEditIsOk ? "" : wrongStr,
+        fix: modalEditIsOk ? "" : fixText,
+        updatedAt: Date.now()
+      };
+    }
+    saveStorage();
+    closeEditQuestionModal();
+    refreshCurrentViewAfterEdit();
+    showToast("题目修改已保存并同步");
+  });
+
+  btnRestoreOriginal.addEventListener("click", () => {
+    if (!modalEditId) return;
+    questionOverrides[modalEditId] = { _restored: true, updatedAt: Date.now() };
+    saveStorage();
+    closeEditQuestionModal();
+    refreshCurrentViewAfterEdit();
+    showToast("已恢复为原书默认题目");
+  });
+
+  // Global Keyword Search (Questions + Confusable + Notes)
+  function highlightKw(text, kw) {
+    const safe = escapeHtml(text || "");
+    if (!kw) return safe;
+    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      return safe.replace(new RegExp(escapedKw, "gi"), m => `<mark class="kw-hl">${m}</mark>`);
+    } catch (e) {
+      return safe;
+    }
+  }
+
+  function openSearchModal() {
+    searchModal.classList.add("open");
+    renderSearchResults();
+    setTimeout(() => {
+      searchInput.focus();
+      searchInput.select();
+    }, 30);
+  }
+
+  function closeSearchModal() {
+    searchModal.classList.remove("open");
+  }
+
+  function renderSearchResults() {
+    const kw = searchInput.value.trim();
+    const kwLower = kw.toLowerCase();
+    const allItems = getUnifiedWrongSource();
+
+    // If scope is "note" and kw is empty, show all items that have a note!
+    if (!kw && searchScope !== "note") {
+      lastSearchTfIds = [];
+      btnPracticeSearch.classList.add("hidden");
+      const noteCnt = Object.values(notes).filter(n => n && n.text && n.text.trim()).length;
+      searchCountText.textContent = `全库共 ${allItems.length} 题 · 已写笔记 ${noteCnt} 条`;
+      searchResults.innerHTML = `
+        <div class="empty-state" style="padding:28px 16px;">
+          <p class="empty-title" style="font-size:15px;">输入关键字快速检索</p>
+          <p class="empty-desc" style="margin-bottom:0;">可搜题干、坑词、正确改法、章节名或个人笔记；点「仅搜笔记」可直接查看全部笔记。</p>
+        </div>
+      `;
+      return;
+    }
+
+    const matches = [];
+    for (const item of allItems) {
+      const rec = getRecord(item.id);
+      const noteText = getNoteText(item.id);
+
+      if (searchScope === "note" && !noteText) continue;
+      if (searchScope === "wrong" && rec.wrong <= 0) continue;
+
+      const qText = item.isCf ? (item.cf.full || (item.cf.pre + item.cf.ans + item.cf.post)) : item.q;
+      const fixText = item.isCf ? (item.cf.ans + " " + (item.cf.note || "")) : (item.fix || "");
+      const metaText = `${item.p} ${item.c} ${item.s}`;
+
+      if (kwLower) {
+        const inQ = (qText + " " + fixText + " " + metaText).toLowerCase().includes(kwLower);
+        const inNote = noteText.toLowerCase().includes(kwLower);
+        if (searchScope === "question" && !inQ) continue;
+        if (searchScope === "note" && !inNote) continue;
+        if ((searchScope === "all" || searchScope === "wrong") && !inQ && !inNote) continue;
+      }
+      matches.push({ item, rec, noteText, qText, fixText });
+    }
+
+    lastSearchTfIds = matches.filter(m => !m.item.isCf).map(m => m.item.id);
+    btnPracticeSearch.classList.toggle("hidden", lastSearchTfIds.length === 0);
+    btnPracticeSearch.textContent = `刷这 ${lastSearchTfIds.length} 道判断题`;
+
+    const shown = matches.slice(0, 80);
+    searchCountText.textContent = matches.length > 80
+      ? `共找到 ${matches.length} 条（已显示前 80 条，输入更精确关键词可缩小范围）`
+      : `共找到 ${matches.length} 条结果`;
+
+    if (shown.length === 0) {
+      searchResults.innerHTML = `
+        <div class="empty-state" style="padding:28px 16px;">
+          <p class="empty-title" style="font-size:15px;">没有找到匹配的内容</p>
+          <p class="empty-desc" style="margin-bottom:0;">换个关键词试试，或切换到「全部（题库+笔记）」范围。</p>
+        </div>
+      `;
+      return;
+    }
+
+    searchResults.innerHTML = shown.map(({ item, rec, noteText, qText }) => {
+      const isCustom = !item.isCf && (item.isCustom || String(item.id).startsWith("c_"));
+      const statBadge = rec.wrong > 0
+        ? `<span class="err-badge">错 ${rec.wrong} 次</span>`
+        : (rec.attempts > 0 ? `<span class="ok-badge">已做 ${rec.attempts} 次</span>` : "");
+      let ansHtml = "";
+      if (item.isCf) {
+        ansHtml = `<div class="correction-line" style="font-size:13.5px;"><span class="correction-label">${item.cf.type === "blank" ? "挖空答案" : "正确选项"}</span><span class="correction-text" style="font-size:14px;">【${highlightKw(item.cf.ans, kw)}】</span></div>`;
+      } else if (item.ok) {
+        ansHtml = `<div class="correction-line" style="font-size:13.5px;"><span class="correction-label">标准答案</span><span class="correction-text" style="font-size:14px;">正确 【√】</span></div>`;
+      } else {
+        ansHtml = `<div class="correction-line" style="font-size:13.5px;"><span class="correction-label">正确改法</span><span class="correction-text" style="font-size:14px;">【${highlightKw(item.fix, kw)}】</span></div>`;
+      }
+      const noteHtml = noteText
+        ? `<div class="wb-note-strip"><strong>笔记：</strong>${highlightKw(noteText, kw)}</div>`
+        : "";
+      return `
+        <div class="search-item">
+          <div class="wb-item-head" style="margin-bottom:4px;">
+            <div class="breadcrumb">
+              <span class="tag">${escapeHtml(item.c)}</span>
+              <span class="tag tag-soft">${escapeHtml(item.s)}</span>
+              ${isCustom ? '<span class="custom-badge">自定义</span>' : ""}
+            </div>
+            <div class="stat-badges">${statBadge}</div>
+          </div>
+          <div class="search-item-q">${highlightKw(qText, kw)}</div>
+          ${ansHtml}
+          ${noteHtml}
+          <div class="search-item-foot">
+            <span>${escapeHtml(item.p)}</span>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn btn-sm js-search-edit" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">编辑</button>
+              <button type="button" class="btn btn-sm btn-primary js-search-jump" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">去刷这题</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  btnOpenSearch.addEventListener("click", openSearchModal);
+  btnCloseSearch.addEventListener("click", closeSearchModal);
+  searchModal.addEventListener("click", (e) => {
+    if (e.target === searchModal) closeSearchModal();
+  });
+  searchInput.addEventListener("input", renderSearchResults);
+  searchScopeGroup.addEventListener("click", (e) => {
+    const btn = e.target.closest(".search-pill");
+    if (!btn) return;
+    searchScope = btn.dataset.scope;
+    for (const b of searchScopeGroup.querySelectorAll(".search-pill")) {
+      b.classList.toggle("active", b.dataset.scope === searchScope);
+    }
+    renderSearchResults();
+  });
+
+  btnPracticeSearch.addEventListener("click", () => {
+    if (lastSearchTfIds.length === 0) return;
+    closeSearchModal();
+    mode = "seq";
+    for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
+      btn.classList.toggle("active", btn.dataset.mode === "seq");
+    }
+    switchTab("quiz");
+    buildQueue(lastSearchTfIds);
+    showToast(`已载入搜索结果中的 ${lastSearchTfIds.length} 道题`);
+  });
+
+  searchResults.addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".js-search-edit");
+    if (editBtn) {
+      openEditQuestionModal(editBtn.dataset.id, editBtn.dataset.cf === "1");
+      return;
+    }
+    const jumpBtn = e.target.closest(".js-search-jump");
+    if (jumpBtn) {
+      const id = jumpBtn.dataset.id;
+      const isCf = jumpBtn.dataset.cf === "1";
+      closeSearchModal();
+      if (isCf) {
+        cfMode = "seq";
+        cfCat = "ALL";
+        for (const btn of cfModeGroup.querySelectorAll(".mode-btn")) {
+          btn.classList.toggle("active", btn.dataset.mode === "seq");
+        }
+        cfSelectCat.value = "ALL";
+        switchTab("confusable");
+        buildCfQueue(CONFUSABLE_QUESTIONS.map(x => x.id));
+        const idx = cfQueue.indexOf(id);
+        if (idx !== -1) {
+          cfIdx = idx;
+          saveCfProgress(true);
+          renderConfusable();
+        }
+      } else {
+        mode = "seq";
+        filterPart = "ALL";
+        filterSection = "ALL";
+        for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
+          btn.classList.toggle("active", btn.dataset.mode === "seq");
+        }
+        populatePartSelects();
+        populateSectionSelect();
+        switchTab("quiz");
+        buildQueue(getAllQuestions().map(x => x.id));
+        const idx = queue.indexOf(id);
+        if (idx !== -1) {
+          currentIdx = idx;
+          saveQuizProgress(true);
+          renderQuiz();
+        }
+      }
+    }
+  });
+
   // Modal & Backup
   function openModal() {
     confirmResetBox.classList.remove("open");
@@ -3543,7 +4218,7 @@
   });
 
   btnExport.addEventListener("click", () => {
-    const payload = JSON.stringify({ version: 4, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, notes, progressState, settings }, null, 2);
+    const payload = JSON.stringify({ version: 5, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, notes, questionOverrides, progressState, settings }, null, 2);
     const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3578,6 +4253,7 @@
           };
         }
         if (parsed.notes && typeof parsed.notes === "object") notes = parsed.notes;
+        if (parsed.questionOverrides && typeof parsed.questionOverrides === "object") questionOverrides = parsed.questionOverrides;
         if (parsed.progressState && typeof parsed.progressState === "object") {
           progressState = Object.assign(progressState, parsed.progressState);
         }
