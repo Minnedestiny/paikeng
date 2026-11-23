@@ -1839,6 +1839,16 @@
 
     <!-- True/False question fields -->
     <div id="editTfFields">
+      <div class="custom-form-grid" style="margin-bottom:10px;">
+        <div class="form-field" style="margin-bottom:0;">
+          <label for="editQPartSelect">所属大类</label>
+          <select class="select-box" id="editQPartSelect"></select>
+        </div>
+        <div class="form-field" style="margin-bottom:0;">
+          <label for="editQSecSelect">所属小类</label>
+          <select class="select-box" id="editQSecSelect"></select>
+        </div>
+      </div>
       <div class="form-field">
         <label>题目正误</label>
         <div class="radio-pill-group">
@@ -1868,6 +1878,10 @@
 
     <!-- Confusable question fields -->
     <div id="editCfFields" class="hidden">
+      <div class="form-field">
+        <label for="editCfCatSelect">所属系列分类</label>
+        <select class="select-box" id="editCfCatSelect"></select>
+      </div>
       <div class="form-field hidden" id="editCfOptsWrap">
         <label for="editCfOpts">可选按钮 <span class="form-hint">（用分号；隔开）</span></label>
         <input type="text" class="text-input" id="editCfOpts">
@@ -1896,9 +1910,14 @@
     </div>
 
     <div class="modal-row" style="justify-content:space-between;align-items:center;">
+      <div class="inline-add-box hidden" id="editDeleteConfirmBox" style="width:100%;margin-bottom:8px;background:var(--err-bg);border:1px solid var(--err-border);padding:8px 10px;border-radius:8px;font-size:12.5px;color:var(--err);flex-wrap:wrap;">
+        <span id="editDeleteConfirmMsg" style="flex:1 1 180px;min-width:0;">确认删除这道题目吗？</span>
+        <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDeleteModalItem">确认删除</button>
+        <button type="button" class="btn btn-sm" id="btnCancelDeleteModalItem">取消</button>
+      </div>
       <div style="display:flex;gap:6px;">
         <button type="button" class="btn btn-danger hidden" id="btnRestoreOriginal">恢复原题</button>
-        <button type="button" class="btn btn-danger hidden" id="btnDeleteCustomCf">删除本题</button>
+        <button type="button" class="btn btn-danger" id="btnDeleteCustomCf">删除本题</button>
       </div>
       <div style="display:flex;gap:8px;margin-left:auto;">
         <button type="button" class="btn" id="btnCancelEditModal">取消</button>
@@ -2007,10 +2026,18 @@
   let customFilterCatVal = "ALL";
   let customSearchVal = "";
 
+  function isDeletedBuiltin(id) {
+    const ov = questionOverrides[id];
+    return !!(ov && ov._deleted);
+  }
+
   function getEffectiveBuiltin(q) {
     const ov = questionOverrides[q.id];
-    if (ov && !ov._restored) {
+    if (ov && !ov._restored && !ov._deleted) {
       return Object.assign({}, q, {
+        p: ov.p !== undefined ? ov.p : q.p,
+        c: ov.c !== undefined ? ov.c : q.c,
+        s: ov.s !== undefined ? ov.s : q.s,
         q: ov.q !== undefined ? ov.q : q.q,
         ok: ov.ok !== undefined ? ov.ok : q.ok,
         r: Array.isArray(ov.r) ? ov.r : q.r,
@@ -2024,11 +2051,12 @@
 
   function getEffectiveConfusable(item) {
     const ov = questionOverrides[item.id];
-    if (ov && !ov._restored) {
+    if (ov && !ov._restored && !ov._deleted) {
       const pre = ov.pre !== undefined ? ov.pre : item.pre;
       const ans = ov.ans !== undefined ? ov.ans : item.ans;
       const post = ov.post !== undefined ? ov.post : item.post;
       return Object.assign({}, item, {
+        cat: ov.cat !== undefined ? ov.cat : item.cat,
         pre,
         ans,
         post,
@@ -2042,11 +2070,11 @@
   }
 
   function getAllQuestions() {
-    return QUESTIONS.map(getEffectiveBuiltin).concat(customQuestions);
+    return QUESTIONS.filter(q => !isDeletedBuiltin(q.id)).map(getEffectiveBuiltin).concat(customQuestions);
   }
 
   function getAllConfusableQuestions() {
-    return CONFUSABLE_QUESTIONS.map(getEffectiveConfusable).concat(customConfusableQuestions);
+    return CONFUSABLE_QUESTIONS.filter(item => !isDeletedBuiltin(item.id)).map(getEffectiveConfusable).concat(customConfusableQuestions);
   }
 
   function computeRanges(qText, wrongStr) {
@@ -2272,6 +2300,13 @@
   const editCfFields = document.getElementById("editCfFields");
   const editCfOptsWrap = document.getElementById("editCfOptsWrap");
   const editCfOpts = document.getElementById("editCfOpts");
+  const editQPartSelect = document.getElementById("editQPartSelect");
+  const editQSecSelect = document.getElementById("editQSecSelect");
+  const editCfCatSelect = document.getElementById("editCfCatSelect");
+  const editDeleteConfirmBox = document.getElementById("editDeleteConfirmBox");
+  const editDeleteConfirmMsg = document.getElementById("editDeleteConfirmMsg");
+  const btnConfirmDeleteModalItem = document.getElementById("btnConfirmDeleteModalItem");
+  const btnCancelDeleteModalItem = document.getElementById("btnCancelDeleteModalItem");
   const btnDeleteCustomCf = document.getElementById("btnDeleteCustomCf");
   const editCfPre = document.getElementById("editCfPre");
   const editCfAns = document.getElementById("editCfAns");
@@ -5104,23 +5139,60 @@
     editPreviewBox.classList.remove("hidden");
   }
 
+  function populateEditQSecSelect(partVal, selectedSecKey) {
+    editQSecSelect.innerHTML = "";
+    const secs = getAvailableSectionsForPart(partVal);
+    for (const sec of secs) {
+      const opt = document.createElement("option");
+      opt.value = sec.key;
+      opt.textContent = formatSectionLabel(partVal, sec.c, sec.s);
+      editQSecSelect.appendChild(opt);
+    }
+    if (selectedSecKey && secs.some(x => x.key === selectedSecKey)) {
+      editQSecSelect.value = selectedSecKey;
+    } else if (selectedSecKey) {
+      const parts = selectedSecKey.split(" / ");
+      const opt = document.createElement("option");
+      opt.value = selectedSecKey;
+      opt.textContent = formatSectionLabel(partVal, parts[0], parts.slice(1).join(" / ") || parts[0]);
+      editQSecSelect.appendChild(opt);
+      editQSecSelect.value = selectedSecKey;
+    } else if (secs.length > 0) {
+      editQSecSelect.value = secs[0].key;
+    }
+  }
+
+  editQPartSelect.addEventListener("change", () => {
+    populateEditQSecSelect(editQPartSelect.value, null);
+  });
+
   function openEditQuestionModal(id, isCf) {
     modalEditId = id;
     modalEditIsCf = !!isCf;
     const isBuiltin = isCf ? CONFUSABLE_QUESTIONS.some(x => x.id === id) : QUESTIONS.some(x => x.id === id);
-    const hasOverride = !!(questionOverrides[id] && !questionOverrides[id]._restored);
+    const hasOverride = !!(questionOverrides[id] && !questionOverrides[id]._restored && !questionOverrides[id]._deleted);
     btnRestoreOriginal.classList.toggle("hidden", !(isBuiltin && hasOverride));
+    btnDeleteCustomCf.classList.remove("hidden");
+    editDeleteConfirmBox.classList.add("hidden");
 
     const isCustomCf = isCf && customConfusableQuestions.some(x => x.id === id);
-    btnDeleteCustomCf.classList.toggle("hidden", !isCustomCf);
 
     if (isCf) {
       const item = CF_MAP.get(id);
       if (!item) return;
-      editModalTitle.textContent = isCustomCf ? "编辑自定义易混淆考点" : "编辑易混淆考点";
+      editModalTitle.textContent = isCustomCf ? "编辑自定义易混淆考点" : "编辑原始易混淆考点";
       editModalMeta.textContent = `${item.cat} · ${item.type === "blank" ? "挖空记忆" : "易混选词"}`;
       editTfFields.classList.add("hidden");
       editCfFields.classList.remove("hidden");
+      const cats = getAllCfCategories();
+      editCfCatSelect.innerHTML = "";
+      for (const c of cats) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        editCfCatSelect.appendChild(opt);
+      }
+      if (item.cat && cats.includes(item.cat)) editCfCatSelect.value = item.cat;
       const isChoice = item.type === "choice";
       editCfOptsWrap.classList.toggle("hidden", !isChoice);
       editCfOpts.value = isChoice ? (item.opts || []).join("；") : "";
@@ -5132,9 +5204,21 @@
       const q = Q_MAP.get(id);
       if (!q) return;
       editModalTitle.textContent = isBuiltin ? "编辑原始题库题目" : "编辑自定义题目";
-      editModalMeta.textContent = `${q.c} / ${q.s} · 第 ${q.n} 题`;
+      editModalMeta.textContent = `${formatSectionLabel(q.p, q.c, q.s)} · 第 ${q.n} 题`;
       editCfFields.classList.add("hidden");
       editTfFields.classList.remove("hidden");
+      const allParts = getAllAvailableParts();
+      editQPartSelect.innerHTML = "";
+      for (const p of allParts) {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        editQPartSelect.appendChild(opt);
+      }
+      const usePart = allParts.includes(q.p) ? q.p : allParts[0];
+      editQPartSelect.value = usePart;
+      populateEditQSecSelect(usePart, q.c + " / " + q.s);
+
       editQText.value = q.q || "";
       setEditModalType(!!q.ok);
       if (!q.ok) {
@@ -5152,16 +5236,28 @@
   }
 
   function closeEditQuestionModal() {
+    editDeleteConfirmBox.classList.add("hidden");
     editQuestionModal.classList.remove("open");
     modalEditId = null;
   }
 
-  function refreshCurrentViewAfterEdit() {
+  function refreshCurrentViewAfterEdit(rebuildQueues) {
     rebuildIndex();
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
+    populateCfCats();
+    updateMultiFilterBarUI();
+    updateNavBadges();
+    updateStarredCounts();
+    if (rebuildQueues) {
+      buildQueue();
+      buildCfQueue();
+    }
     if (activeTab === "wrong") renderWrongBook();
     else if (activeTab === "custom") renderCustomManager();
-    else if (activeTab === "confusable") renderConfusable();
-    else renderQuiz();
+    else if (activeTab === "confusable") { if (!rebuildQueues) renderConfusable(); }
+    else { if (!rebuildQueues) renderQuiz(); }
     if (searchModal.classList.contains("open")) renderSearchResults();
   }
 
@@ -5199,14 +5295,15 @@
         if (!parsedOpts.includes(ans)) parsedOpts.unshift(ans);
         newOpts = parsedOpts;
       }
+      const newCat = editCfCatSelect.value || (curItem ? curItem.cat : "");
       const ccfIdx = customConfusableQuestions.findIndex(x => x.id === modalEditId);
       if (ccfIdx !== -1) {
         customConfusableQuestions[ccfIdx] = Object.assign({}, customConfusableQuestions[ccfIdx], {
-          pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
+          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
         });
       } else {
         questionOverrides[modalEditId] = {
-          pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
+          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
         };
       }
       const newNoteVal = editNoteText.value.trim();
@@ -5233,10 +5330,19 @@
       editFixText.focus();
       return;
     }
+    const partVal = editQPartSelect.value || BUILTIN_PARTS[0];
+    const secKey = editQSecSelect.value;
+    const secs = getAvailableSectionsForPart(partVal);
+    const secObj = secs.find(x => x.key === secKey);
+    const chapVal = secObj ? secObj.c : (secKey ? secKey.split(" / ")[0] : partVal);
+    const secVal = secObj ? secObj.s : (secKey ? (secKey.split(" / ").slice(1).join(" / ") || "直属大类") : "直属大类");
     const ranges = modalEditIsOk ? [] : computeRanges(qText, wrongStr);
     const customIdx = customQuestions.findIndex(x => x.id === modalEditId);
     if (customIdx !== -1) {
       customQuestions[customIdx] = Object.assign({}, customQuestions[customIdx], {
+        p: partVal,
+        c: chapVal,
+        s: secVal,
         q: qText,
         ok: modalEditIsOk,
         r: ranges,
@@ -5246,6 +5352,9 @@
       });
     } else {
       questionOverrides[modalEditId] = {
+        p: partVal,
+        c: chapVal,
+        s: secVal,
         q: qText,
         ok: modalEditIsOk,
         r: ranges,
@@ -5773,19 +5882,46 @@
 
   btnDeleteCustomCf.addEventListener("click", () => {
     if (!modalEditId) return;
+    const isBuiltin = modalEditIsCf
+      ? CONFUSABLE_QUESTIONS.some(x => x.id === modalEditId)
+      : QUESTIONS.some(x => x.id === modalEditId);
+    editDeleteConfirmMsg.textContent = isBuiltin
+      ? "确认删除这道原始题目吗？删除后将不再出现在题库与搜索中："
+      : "确认彻底删除这道自定义题目吗？";
+    editDeleteConfirmBox.classList.toggle("hidden");
+  });
+
+  btnCancelDeleteModalItem.addEventListener("click", () => {
+    editDeleteConfirmBox.classList.add("hidden");
+  });
+
+  btnConfirmDeleteModalItem.addEventListener("click", () => {
+    if (!modalEditId) return;
     const delId = modalEditId;
-    customConfusableQuestions = customConfusableQuestions.filter(x => x.id !== delId);
-    if (!deletedCustomCfIds.includes(delId)) deletedCustomCfIds.push(delId);
+    const isCf = modalEditIsCf;
+    const now = Date.now();
+    if (isCf) {
+      const isCustomCf = customConfusableQuestions.some(x => x.id === delId);
+      if (isCustomCf) {
+        customConfusableQuestions = customConfusableQuestions.filter(x => x.id !== delId);
+        if (!deletedCustomCfIds.includes(delId)) deletedCustomCfIds.push(delId);
+      } else {
+        questionOverrides[delId] = { _deleted: true, updatedAt: now };
+      }
+    } else {
+      const isCustomQ = customQuestions.some(x => x.id === delId);
+      if (isCustomQ) {
+        customQuestions = customQuestions.filter(x => x.id !== delId);
+        if (!deletedCustomIds.includes(delId)) deletedCustomIds.push(delId);
+      } else {
+        questionOverrides[delId] = { _deleted: true, updatedAt: now };
+      }
+    }
     delete records[delId];
     saveStorage();
     closeEditQuestionModal();
-    rebuildIndex();
-    populatePartSelects();
-    populateCfCats();
-    buildCfQueue();
-    if (activeTab === "wrong") renderWrongBook();
-    if (searchModal.classList.contains("open")) renderSearchResults();
-    showToast("已删除该自定义易混淆考点");
+    refreshCurrentViewAfterEdit(true);
+    showToast("已删除该题目");
   });
 
   // Global Keyword Search (Questions + Confusable + Notes)
