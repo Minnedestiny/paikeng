@@ -1260,6 +1260,118 @@
     font-weight: 600;
   }
 
+  .btn-multi-filter {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .btn-multi-filter:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .btn-multi-filter.active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: #fff;
+  }
+  .tree-scroll {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: var(--surface-soft);
+    min-height: 200px;
+    max-height: 55vh;
+  }
+  .tree-part {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .tree-part:last-child { margin-bottom: 0; }
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+  }
+  .tree-row.is-part {
+    font-weight: 700;
+    background: #faf9f5;
+    border-bottom: 1px solid var(--border);
+  }
+  .tree-row.is-chap {
+    padding-left: 24px;
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .tree-row.is-sec {
+    padding-left: 44px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .tree-row input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tree-row label {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    user-select: none;
+    word-break: break-word;
+  }
+  .tree-toggle {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tree-toggle:hover {
+    background: var(--surface-soft);
+    color: var(--text);
+  }
+  .tree-cnt {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .multi-active-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 640px) {
@@ -1318,11 +1430,13 @@
         <select class="select-box" id="selectPart" aria-label="按篇筛选"></select>
         <select class="select-box" id="selectChapter" aria-label="按章筛选"></select>
         <select class="select-box" id="selectSection" aria-label="按小节筛选"></select>
+        <button type="button" class="btn-multi-filter" id="btnOpenMultiFilter">☑ 多选分类</button>
         <label class="toggle-label">
           <input type="checkbox" id="toggleAutoNext">
           答对自动下一题
         </label>
       </div>
+      <div class="multi-active-bar hidden" id="multiActiveBar"></div>
     </div>
 
     <div class="progress-wrap" id="progressWrap">
@@ -1544,6 +1658,30 @@
   </div>
 </div>
 
+<!-- Multi-Select Category Modal -->
+<div class="modal-backdrop" id="multiFilterModal" role="dialog" aria-modal="true" aria-labelledby="multiModalTitle">
+  <div class="modal modal-search">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+      <h3 class="modal-title" id="multiModalTitle" style="margin:0;">自选刷题分类（可多选组合）</h3>
+      <button type="button" class="btn btn-sm" id="btnCloseMultiModal">关闭</button>
+    </div>
+    <p class="modal-desc" style="margin-bottom:10px;">勾选任意篇章、章节或小节自由组合刷题，支持顺序、随机、错题专攻和错题乱序模式。</p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn btn-sm" id="btnMultiSelectAll">全选</button>
+        <button type="button" class="btn btn-sm" id="btnMultiClearAll">全不选</button>
+        <button type="button" class="btn btn-sm" id="btnMultiExpandAll">展开/收起小节</button>
+      </div>
+      <span id="multiSummaryText" style="font-size:12.5px;font-weight:600;color:var(--primary);">已选 0 题</span>
+    </div>
+    <div class="tree-scroll" id="multiTreeContainer"></div>
+    <div class="modal-row" style="justify-content:space-between;align-items:center;">
+      <button type="button" class="btn" id="btnMultiExitMode">取消多选（恢复下拉）</button>
+      <button type="button" class="btn btn-primary" id="btnApplyMultiFilter">应用并开始刷题</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Custom Confusable Question Modal -->
 <div class="modal-backdrop" id="addCfModal" role="dialog" aria-modal="true" aria-labelledby="addCfModalTitle">
   <div class="modal modal-wide">
@@ -1751,7 +1889,7 @@
   let savedBookmark = null; // snapshot before jumping from search so user can return to exact progress
   let progressState = {
     activeTab: "quiz",
-    quiz: { mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {}, indices: {}, queues: {} },
+    quiz: { mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", multiSelectedKeys: [], positions: {}, indices: {}, queues: {} },
     cf: { mode: "seq", cat: "ALL", positions: {}, indices: {}, queues: {} }
   };
   let editingNoteId = null;
@@ -1770,6 +1908,9 @@
   let filterPart = "ALL";
   let filterChapter = "ALL";
   let filterSection = "ALL";
+  let multiSelectedKeys = []; // array of "part||chapter||section" keys when multi-filter is active
+  let draftMultiSet = new Set();
+  let multiExpandedChaps = new Set();
   let queue = [];
   let currentIdx = 0;
   let currentAnswer = null; // null | { chosen: boolean, isRight: boolean }
@@ -1948,6 +2089,17 @@
   const selectPart = document.getElementById("selectPart");
   const selectChapter = document.getElementById("selectChapter");
   const selectSection = document.getElementById("selectSection");
+  const btnOpenMultiFilter = document.getElementById("btnOpenMultiFilter");
+  const multiActiveBar = document.getElementById("multiActiveBar");
+  const multiFilterModal = document.getElementById("multiFilterModal");
+  const btnCloseMultiModal = document.getElementById("btnCloseMultiModal");
+  const btnMultiSelectAll = document.getElementById("btnMultiSelectAll");
+  const btnMultiClearAll = document.getElementById("btnMultiClearAll");
+  const btnMultiExpandAll = document.getElementById("btnMultiExpandAll");
+  const multiSummaryText = document.getElementById("multiSummaryText");
+  const multiTreeContainer = document.getElementById("multiTreeContainer");
+  const btnMultiExitMode = document.getElementById("btnMultiExitMode");
+  const btnApplyMultiFilter = document.getElementById("btnApplyMultiFilter");
   const toggleAutoNext = document.getElementById("toggleAutoNext");
   const progressWrap = document.getElementById("progressWrap");
   const progPos = document.getElementById("progPos");
@@ -2064,7 +2216,8 @@
             const ps = parsed.progressState;
             progressState.activeTab = ps.activeTab || "quiz";
             if (ps.quiz && typeof ps.quiz === "object") {
-              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", positions: {}, indices: {}, queues: {} }, ps.quiz);
+              progressState.quiz = Object.assign({ mode: "seq", filterPart: "ALL", filterChapter: "ALL", filterSection: "ALL", multiSelectedKeys: [], positions: {}, indices: {}, queues: {} }, ps.quiz);
+              if (!Array.isArray(progressState.quiz.multiSelectedKeys)) progressState.quiz.multiSelectedKeys = [];
               if (!progressState.quiz.positions || typeof progressState.quiz.positions !== "object") progressState.quiz.positions = {};
               if (!progressState.quiz.indices || typeof progressState.quiz.indices !== "object") progressState.quiz.indices = {};
               if (!progressState.quiz.queues || typeof progressState.quiz.queues !== "object") progressState.quiz.queues = {};
@@ -2226,7 +2379,14 @@
     }
   }
 
+  function getMultiKeyHash(keys) {
+    return keys.slice().sort().join("~");
+  }
+
   function getQuizPosKey() {
+    if (multiSelectedKeys.length > 0) {
+      return `${mode}|MULTI|${getMultiKeyHash(multiSelectedKeys)}`;
+    }
     return `${mode}|${filterPart}|${filterChapter}|${filterSection}`;
   }
 
@@ -2237,6 +2397,7 @@
     progressState.quiz.filterPart = filterPart;
     progressState.quiz.filterChapter = filterChapter;
     progressState.quiz.filterSection = filterSection;
+    progressState.quiz.multiSelectedKeys = multiSelectedKeys.slice();
     if (!progressState.quiz.indices) progressState.quiz.indices = {};
     if (!progressState.quiz.queues) progressState.quiz.queues = {};
     if (queue.length > 0 && queue[currentIdx]) {
@@ -2320,6 +2481,7 @@
       filterPart,
       filterChapter,
       filterSection,
+      multiSelectedKeys: multiSelectedKeys.slice(),
       queue: queue.slice(),
       currentIdx,
       cfMode,
@@ -2340,6 +2502,8 @@
     filterPart = bm.filterPart;
     filterChapter = bm.filterChapter || "ALL";
     filterSection = bm.filterSection;
+    multiSelectedKeys = Array.isArray(bm.multiSelectedKeys) ? bm.multiSelectedKeys.slice() : [];
+    updateMultiFilterBarUI();
     for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
       btn.classList.toggle("active", btn.dataset.mode === mode);
     }
@@ -2503,7 +2667,11 @@
       renderQuiz();
       return;
     }
+    const multiSet = multiSelectedKeys.length > 0 ? new Set(multiSelectedKeys) : null;
     let list = getAllQuestions().filter(q => {
+      if (multiSet) {
+        return multiSet.has(`${q.p}||${q.c}||${q.s}`);
+      }
       if (filterPart !== "ALL" && q.p !== filterPart) return false;
       if (filterChapter !== "ALL" && (q.p + "||" + q.c) !== filterChapter) return false;
       if (filterSection !== "ALL" && (q.c + " / " + q.s) !== filterSection) return false;
@@ -3777,6 +3945,8 @@
   selectPart.addEventListener("change", () => {
     selectPart.blur();
     savedBookmark = null;
+    multiSelectedKeys = [];
+    updateMultiFilterBarUI();
     renderReturnBanners();
     filterPart = selectPart.value;
     filterChapter = "ALL";
@@ -3789,6 +3959,8 @@
   selectChapter.addEventListener("change", () => {
     selectChapter.blur();
     savedBookmark = null;
+    multiSelectedKeys = [];
+    updateMultiFilterBarUI();
     renderReturnBanners();
     filterChapter = selectChapter.value;
     filterSection = "ALL";
@@ -3799,6 +3971,8 @@
   selectSection.addEventListener("change", () => {
     selectSection.blur();
     savedBookmark = null;
+    multiSelectedKeys = [];
+    updateMultiFilterBarUI();
     renderReturnBanners();
     filterSection = selectSection.value;
     buildQueue();
@@ -3877,12 +4051,13 @@
     const isEnter = key === "Enter" || code === "Enter" || kc === 13;
 
     if (key === "Escape" || kc === 27) {
+      if (multiFilterModal.classList.contains("open")) { closeMultiFilterModal(); return; }
       if (addCfModal.classList.contains("open")) { closeAddCfModal(); return; }
       if (searchModal.classList.contains("open")) { closeSearchModal(); return; }
       if (editQuestionModal.classList.contains("open")) { closeEditQuestionModal(); return; }
       if (backupModal.classList.contains("open")) { closeModal(); return; }
     }
-    if (backupModal.classList.contains("open") || editQuestionModal.classList.contains("open") || searchModal.classList.contains("open") || addCfModal.classList.contains("open")) return;
+    if (backupModal.classList.contains("open") || editQuestionModal.classList.contains("open") || searchModal.classList.contains("open") || addCfModal.classList.contains("open") || multiFilterModal.classList.contains("open")) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     const target = e.target;
@@ -4463,6 +4638,260 @@
     showToast("已恢复为原书默认题目");
   });
 
+  // Multi-Select Category Tree Logic (Part -> Chapter -> Section)
+  function buildCategoryTree() {
+    const allQ = getAllQuestions();
+    const parts = [];
+    const partMap = new Map();
+    for (const q of allQ) {
+      if (!partMap.has(q.p)) {
+        const pNode = { p: q.p, count: 0, chaps: [], chapMap: new Map() };
+        partMap.set(q.p, pNode);
+        parts.push(pNode);
+      }
+      const pNode = partMap.get(q.p);
+      pNode.count += 1;
+      if (!pNode.chapMap.has(q.c)) {
+        const cNode = { p: q.p, c: q.c, ck: `${q.p}||${q.c}`, count: 0, secs: [], secMap: new Map() };
+        pNode.chapMap.set(q.c, cNode);
+        pNode.chaps.push(cNode);
+      }
+      const cNode = pNode.chapMap.get(q.c);
+      cNode.count += 1;
+      const sk = `${q.p}||${q.c}||${q.s}`;
+      if (!cNode.secMap.has(sk)) {
+        const sNode = { p: q.p, c: q.c, s: q.s, sk, count: 0 };
+        cNode.secMap.set(sk, sNode);
+        cNode.secs.push(sNode);
+      }
+      cNode.secMap.get(sk).count += 1;
+    }
+    return parts;
+  }
+
+  function getAllSectionKeys() {
+    const keys = [];
+    const seen = new Set();
+    for (const q of getAllQuestions()) {
+      const sk = `${q.p}||${q.c}||${q.s}`;
+      if (!seen.has(sk)) { seen.add(sk); keys.push(sk); }
+    }
+    return keys;
+  }
+
+  function updateMultiFilterBarUI() {
+    const active = multiSelectedKeys.length > 0;
+    btnOpenMultiFilter.classList.toggle("active", active);
+    btnOpenMultiFilter.textContent = active ? `☑ 已选 ${multiSelectedKeys.length} 个小节` : "☑ 多选分类";
+    if (!active) {
+      multiActiveBar.classList.add("hidden");
+      multiActiveBar.innerHTML = "";
+      return;
+    }
+    const set = new Set(multiSelectedKeys);
+    const totalQ = getAllQuestions().filter(q => set.has(`${q.p}||${q.c}||${q.s}`)).length;
+    multiActiveBar.innerHTML = `
+      <span>当前为自定义多选范围：已勾选 ${multiSelectedKeys.length} 个小节（共 ${totalQ} 题）</span>
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn btn-sm" id="btnEditMultiFromBar">调整勾选</button>
+        <button type="button" class="btn btn-sm" id="btnClearMultiFromBar">恢复全部</button>
+      </div>
+    `;
+    multiActiveBar.classList.remove("hidden");
+  }
+
+  function renderMultiTree() {
+    const tree = buildCategoryTree();
+    let selectedQCount = 0;
+    for (const q of getAllQuestions()) {
+      if (draftMultiSet.has(`${q.p}||${q.c}||${q.s}`)) selectedQCount += 1;
+    }
+    multiSummaryText.textContent = `已选 ${draftMultiSet.size} 个小节（共 ${selectedQCount} 题）`;
+    btnApplyMultiFilter.disabled = draftMultiSet.size === 0;
+
+    multiTreeContainer.innerHTML = tree.map((pNode, pi) => {
+      const pSecKeys = [];
+      for (const c of pNode.chaps) for (const s of c.secs) pSecKeys.push(s.sk);
+      const pCheckedCnt = pSecKeys.filter(k => draftMultiSet.has(k)).length;
+      const pAll = pCheckedCnt === pSecKeys.length && pSecKeys.length > 0;
+      const pSome = pCheckedCnt > 0 && pCheckedCnt < pSecKeys.length;
+
+      const chapsHtml = pNode.chaps.map((cNode, ci) => {
+        const cSecKeys = cNode.secs.map(s => s.sk);
+        const cCheckedCnt = cSecKeys.filter(k => draftMultiSet.has(k)).length;
+        const cAll = cCheckedCnt === cSecKeys.length && cSecKeys.length > 0;
+        const cSome = cCheckedCnt > 0 && cCheckedCnt < cSecKeys.length;
+        const expanded = multiExpandedChaps.has(cNode.ck);
+
+        const secsHtml = expanded ? cNode.secs.map((sNode, si) => {
+          const checked = draftMultiSet.has(sNode.sk);
+          const sid = `ms_${pi}_${ci}_${si}`;
+          return `
+            <div class="tree-row is-sec">
+              <input type="checkbox" id="${sid}" class="js-tree-sec" data-sk="${escapeHtml(sNode.sk)}" ${checked ? "checked" : ""}>
+              <label for="${sid}">${escapeHtml(sNode.s)}</label>
+              <span class="tree-cnt">${sNode.count}题</span>
+            </div>
+          `;
+        }).join("") : "";
+
+        const cid = `mc_${pi}_${ci}`;
+        return `
+          <div class="tree-row is-chap">
+            <input type="checkbox" id="${cid}" class="js-tree-chap" data-ck="${escapeHtml(cNode.ck)}" ${cAll ? "checked" : ""} data-ind="${cSome ? "1" : "0"}">
+            <label for="${cid}">${escapeHtml(cNode.c)}</label>
+            <span class="tree-cnt">${cNode.count}题</span>
+            <button type="button" class="tree-toggle js-tree-expand" data-ck="${escapeHtml(cNode.ck)}">${expanded ? "收起 ▴" : "展开小节 ▾"}</button>
+          </div>
+          ${secsHtml}
+        `;
+      }).join("");
+
+      const pid = `mp_${pi}`;
+      return `
+        <div class="tree-part">
+          <div class="tree-row is-part">
+            <input type="checkbox" id="${pid}" class="js-tree-part" data-part="${escapeHtml(pNode.p)}" ${pAll ? "checked" : ""} data-ind="${pSome ? "1" : "0"}">
+            <label for="${pid}">${escapeHtml(pNode.p)}</label>
+            <span class="tree-cnt">${pNode.count}题</span>
+          </div>
+          ${chapsHtml}
+        </div>
+      `;
+    }).join("");
+
+    // Apply indeterminate states visually
+    for (const cb of multiTreeContainer.querySelectorAll('input[data-ind="1"]')) {
+      cb.indeterminate = true;
+    }
+  }
+
+  function openMultiFilterModal() {
+    if (multiSelectedKeys.length > 0) {
+      draftMultiSet = new Set(multiSelectedKeys);
+    } else {
+      // Pre-check whatever the current dropdown filter matches
+      const curKeys = new Set();
+      for (const q of getAllQuestions()) {
+        if (filterPart !== "ALL" && q.p !== filterPart) continue;
+        if (filterChapter !== "ALL" && (q.p + "||" + q.c) !== filterChapter) continue;
+        if (filterSection !== "ALL" && (q.c + " / " + q.s) !== filterSection) continue;
+        curKeys.add(`${q.p}||${q.c}||${q.s}`);
+      }
+      draftMultiSet = curKeys;
+    }
+    renderMultiTree();
+    multiFilterModal.classList.add("open");
+  }
+
+  function closeMultiFilterModal() {
+    multiFilterModal.classList.remove("open");
+  }
+
+  btnOpenMultiFilter.addEventListener("click", openMultiFilterModal);
+  btnCloseMultiModal.addEventListener("click", closeMultiFilterModal);
+  multiFilterModal.addEventListener("click", (e) => {
+    if (e.target === multiFilterModal) closeMultiFilterModal();
+  });
+
+  multiActiveBar.addEventListener("click", (e) => {
+    if (e.target.closest("#btnEditMultiFromBar")) {
+      openMultiFilterModal();
+    } else if (e.target.closest("#btnClearMultiFromBar")) {
+      savedBookmark = null;
+      multiSelectedKeys = [];
+      updateMultiFilterBarUI();
+      renderReturnBanners();
+      buildQueue();
+      showToast("已恢复全部下拉筛选");
+    }
+  });
+
+  btnMultiSelectAll.addEventListener("click", () => {
+    draftMultiSet = new Set(getAllSectionKeys());
+    renderMultiTree();
+  });
+  btnMultiClearAll.addEventListener("click", () => {
+    draftMultiSet.clear();
+    renderMultiTree();
+  });
+  btnMultiExpandAll.addEventListener("click", () => {
+    const tree = buildCategoryTree();
+    const allCks = [];
+    for (const p of tree) for (const c of p.chaps) allCks.push(c.ck);
+    if (multiExpandedChaps.size >= allCks.length) {
+      multiExpandedChaps.clear();
+    } else {
+      multiExpandedChaps = new Set(allCks);
+    }
+    renderMultiTree();
+  });
+
+  multiTreeContainer.addEventListener("click", (e) => {
+    const expBtn = e.target.closest(".js-tree-expand");
+    if (expBtn) {
+      const ck = expBtn.dataset.ck;
+      if (multiExpandedChaps.has(ck)) multiExpandedChaps.delete(ck);
+      else multiExpandedChaps.add(ck);
+      renderMultiTree();
+    }
+  });
+
+  multiTreeContainer.addEventListener("change", (e) => {
+    const target = e.target;
+    if (!target || target.type !== "checkbox") return;
+    if (target.classList.contains("js-tree-part")) {
+      const pName = target.dataset.part;
+      for (const q of getAllQuestions()) {
+        if (q.p === pName) {
+          const sk = `${q.p}||${q.c}||${q.s}`;
+          if (target.checked) draftMultiSet.add(sk);
+          else draftMultiSet.delete(sk);
+        }
+      }
+      renderMultiTree();
+    } else if (target.classList.contains("js-tree-chap")) {
+      const ck = target.dataset.ck;
+      for (const q of getAllQuestions()) {
+        if (`${q.p}||${q.c}` === ck) {
+          const sk = `${q.p}||${q.c}||${q.s}`;
+          if (target.checked) draftMultiSet.add(sk);
+          else draftMultiSet.delete(sk);
+        }
+      }
+      renderMultiTree();
+    } else if (target.classList.contains("js-tree-sec")) {
+      const sk = target.dataset.sk;
+      if (target.checked) draftMultiSet.add(sk);
+      else draftMultiSet.delete(sk);
+      renderMultiTree();
+    }
+  });
+
+  btnMultiExitMode.addEventListener("click", () => {
+    savedBookmark = null;
+    multiSelectedKeys = [];
+    closeMultiFilterModal();
+    updateMultiFilterBarUI();
+    renderReturnBanners();
+    buildQueue();
+    showToast("已切回单选下拉模式");
+  });
+
+  btnApplyMultiFilter.addEventListener("click", () => {
+    if (draftMultiSet.size === 0) {
+      showToast("请至少勾选一个分类");
+      return;
+    }
+    savedBookmark = null;
+    multiSelectedKeys = [...draftMultiSet];
+    closeMultiFilterModal();
+    updateMultiFilterBarUI();
+    renderReturnBanners();
+    buildQueue();
+    showToast(`已应用自选分类（${multiSelectedKeys.length} 个小节）`);
+  });
+
   // Custom Confusable Modal & Delete Logic
   function populateAddCfCatSelect(selectedCat) {
     const cats = getAllCfCategories();
@@ -4992,6 +5421,8 @@
   filterPart = progressState.quiz.filterPart || "ALL";
   filterChapter = progressState.quiz.filterChapter || "ALL";
   filterSection = progressState.quiz.filterSection || "ALL";
+  multiSelectedKeys = Array.isArray(progressState.quiz.multiSelectedKeys) ? progressState.quiz.multiSelectedKeys.slice() : [];
+  updateMultiFilterBarUI();
   for (const btn of modeGroup.querySelectorAll(".mode-btn")) {
     btn.classList.toggle("active", btn.dataset.mode === mode);
   }
