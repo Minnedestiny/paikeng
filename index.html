@@ -1523,6 +1523,7 @@
           <label for="customPartSelect">所属大类（篇章）</label>
           <div class="select-with-add">
             <select class="select-box" id="customPartSelect"></select>
+            <button type="button" class="btn-add-mini hidden" id="btnRenamePart" title="修改当前自定义大类名称">改名</button>
             <button type="button" class="btn-add-mini" id="btnAddNewPart">+ 新建</button>
           </div>
           <div class="inline-add-box hidden" id="newPartBox">
@@ -1530,17 +1531,28 @@
             <button type="button" class="btn btn-sm btn-primary" id="btnConfirmNewPart">确定</button>
             <button type="button" class="btn btn-sm" id="btnCancelNewPart">取消</button>
           </div>
+          <div class="inline-add-box hidden" id="renamePartBox">
+            <input type="text" class="text-input" id="renamePartInput" placeholder="输入修改后的大类名称">
+            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenamePart">保存</button>
+            <button type="button" class="btn btn-sm" id="btnCancelRenamePart">取消</button>
+          </div>
         </div>
         <div class="form-field" style="margin-bottom:0;">
           <label for="customSectionSelect">所属小类（章 / 小节）</label>
           <div class="select-with-add">
             <select class="select-box" id="customSectionSelect"></select>
+            <button type="button" class="btn-add-mini hidden" id="btnRenameSec" title="修改当前自定义小类名称">改名</button>
             <button type="button" class="btn-add-mini" id="btnAddNewSec">+ 新建</button>
           </div>
           <div class="inline-add-box hidden" id="newSecBox">
             <input type="text" class="text-input" id="newSecInput" placeholder="输入新小类名，如：科技常识 / 二十届四中全会">
             <button type="button" class="btn btn-sm btn-primary" id="btnConfirmNewSec">确定</button>
             <button type="button" class="btn btn-sm" id="btnCancelNewSec">取消</button>
+          </div>
+          <div class="inline-add-box hidden" id="renameSecBox">
+            <input type="text" class="text-input" id="renameSecInput" placeholder="输入修改后的小类名称">
+            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenameSec">保存</button>
+            <button type="button" class="btn btn-sm" id="btnCancelRenameSec">取消</button>
           </div>
         </div>
       </div>
@@ -1692,12 +1704,18 @@
       <label for="addCfCatSelect">所属易混淆类别</label>
       <div class="select-with-add">
         <select class="select-box" id="addCfCatSelect"></select>
+        <button type="button" class="btn-add-mini hidden" id="btnRenameCfCat" title="修改当前自定义类别名称">改名</button>
         <button type="button" class="btn-add-mini" id="btnAddNewCfCat">+ 新建</button>
       </div>
       <div class="inline-add-box hidden" id="newCfCatBox">
         <input type="text" class="text-input" id="newCfCatInput" placeholder="输入新类别名，如：根本/关键/核心区分">
         <button type="button" class="btn btn-sm btn-primary" id="btnConfirmNewCfCat">确定</button>
         <button type="button" class="btn btn-sm" id="btnCancelNewCfCat">取消</button>
+      </div>
+      <div class="inline-add-box hidden" id="renameCfCatBox">
+        <input type="text" class="text-input" id="renameCfCatInput" placeholder="输入修改后的类别名称">
+        <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenameCfCat">保存</button>
+        <button type="button" class="btn btn-sm" id="btnCancelRenameCfCat">取消</button>
       </div>
     </div>
 
@@ -2060,6 +2078,16 @@
   const newSecInput = document.getElementById("newSecInput");
   const btnConfirmNewSec = document.getElementById("btnConfirmNewSec");
   const btnCancelNewSec = document.getElementById("btnCancelNewSec");
+  const btnRenamePart = document.getElementById("btnRenamePart");
+  const renamePartBox = document.getElementById("renamePartBox");
+  const renamePartInput = document.getElementById("renamePartInput");
+  const btnConfirmRenamePart = document.getElementById("btnConfirmRenamePart");
+  const btnCancelRenamePart = document.getElementById("btnCancelRenamePart");
+  const btnRenameSec = document.getElementById("btnRenameSec");
+  const renameSecBox = document.getElementById("renameSecBox");
+  const renameSecInput = document.getElementById("renameSecInput");
+  const btnConfirmRenameSec = document.getElementById("btnConfirmRenameSec");
+  const btnCancelRenameSec = document.getElementById("btnCancelRenameSec");
   const btnTypeFalse = document.getElementById("btnTypeFalse");
   const btnTypeTrue = document.getElementById("btnTypeTrue");
   const customQuestion = document.getElementById("customQuestion");
@@ -2160,6 +2188,11 @@
   const newCfCatInput = document.getElementById("newCfCatInput");
   const btnConfirmNewCfCat = document.getElementById("btnConfirmNewCfCat");
   const btnCancelNewCfCat = document.getElementById("btnCancelNewCfCat");
+  const btnRenameCfCat = document.getElementById("btnRenameCfCat");
+  const renameCfCatBox = document.getElementById("renameCfCatBox");
+  const renameCfCatInput = document.getElementById("renameCfCatInput");
+  const btnConfirmRenameCfCat = document.getElementById("btnConfirmRenameCfCat");
+  const btnCancelRenameCfCat = document.getElementById("btnCancelRenameCfCat");
   const addCfTypeChoice = document.getElementById("addCfTypeChoice");
   const addCfTypeBlank = document.getElementById("addCfTypeBlank");
   const addCfOptsWrap = document.getElementById("addCfOptsWrap");
@@ -3186,6 +3219,26 @@
     } else if (secs.length > 0) {
       customSectionSelect.value = secs[0].key;
     }
+    updateRenameCustomBtnVisibility();
+  }
+
+  function isUserCustomPart(pName) {
+    return !!pName && !BUILTIN_PARTS.includes(pName);
+  }
+
+  function isUserCustomSection(partVal, secKey) {
+    if (!partVal || !secKey) return false;
+    const builtinSecs = BUILTIN_PART_SECTIONS.get(partVal) || [];
+    return !builtinSecs.some(x => x.key === secKey);
+  }
+
+  function updateRenameCustomBtnVisibility() {
+    const pVal = customPartSelect.value;
+    const sKey = customSectionSelect.value;
+    btnRenamePart.classList.toggle("hidden", !isUserCustomPart(pVal));
+    btnRenameSec.classList.toggle("hidden", !isUserCustomSection(pVal, sKey));
+    renamePartBox.classList.add("hidden");
+    renameSecBox.classList.add("hidden");
   }
 
   function resetCustomForm(keepCategory) {
@@ -3846,6 +3899,150 @@
   btnConfirmNewSec.addEventListener("click", confirmAddSec);
   newSecInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); confirmAddSec(); }
+  });
+
+  customSectionSelect.addEventListener("change", updateRenameCustomBtnVisibility);
+
+  function confirmRenamePart() {
+    const oldName = customPartSelect.value;
+    const newName = renamePartInput.value.trim();
+    if (!isUserCustomPart(oldName)) return;
+    if (!newName) {
+      showToast("请输入新的大类名称");
+      renamePartInput.focus();
+      return;
+    }
+    if (newName === oldName) {
+      renamePartBox.classList.add("hidden");
+      return;
+    }
+    if (BUILTIN_PARTS.includes(newName)) {
+      showToast("不能与原书内置大类重名");
+      return;
+    }
+    const now = Date.now();
+    // 1. Update customCategories.parts & sections map
+    customCategories.parts = (customCategories.parts || []).filter(x => x !== oldName);
+    if (!customCategories.parts.includes(newName)) customCategories.parts.push(newName);
+    if (customCategories.sections && customCategories.sections[oldName]) {
+      const mergedSecs = (customCategories.sections[newName] || []).slice();
+      for (const s of customCategories.sections[oldName]) {
+        if (!mergedSecs.includes(s)) mergedSecs.push(s);
+      }
+      customCategories.sections[newName] = mergedSecs;
+      delete customCategories.sections[oldName];
+    }
+    // 2. Cascade rename across all customQuestions under oldName
+    for (const q of customQuestions) {
+      if (q.p === oldName) {
+        q.p = newName;
+        q.updatedAt = now;
+      }
+    }
+    // 3. Update active filters & multiSelectedKeys
+    if (filterPart === oldName) filterPart = newName;
+    if (filterChapter.startsWith(oldName + "||")) filterChapter = newName + filterChapter.slice(oldName.length);
+    if (customFilterPartVal === oldName) customFilterPartVal = newName;
+    if (wbPart === oldName) wbPart = newName;
+    multiSelectedKeys = multiSelectedKeys.map(k => k.startsWith(oldName + "||") ? (newName + k.slice(oldName.length)) : k);
+
+    const curSecKey = customSectionSelect.value;
+    renamePartBox.classList.add("hidden");
+    saveStorage();
+    rebuildIndex();
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
+    populateCustomFormDropdowns(newName, curSecKey);
+    updateMultiFilterBarUI();
+    buildQueue();
+    renderCustomManager();
+    showToast(`大类已改名为「${newName}」`);
+  }
+
+  function confirmRenameSec() {
+    const partVal = customPartSelect.value;
+    const oldKey = customSectionSelect.value;
+    if (!isUserCustomSection(partVal, oldKey)) return;
+    const secs = getAvailableSectionsForPart(partVal);
+    const curObj = secs.find(x => x.key === oldKey);
+    if (!curObj) return;
+    const oldChap = curObj.c;
+    const oldSecName = curObj.s;
+    const newSecName = renameSecInput.value.trim();
+    if (!newSecName) {
+      showToast("请输入新的小类名称");
+      renameSecInput.focus();
+      return;
+    }
+    if (newSecName === oldSecName) {
+      renameSecBox.classList.add("hidden");
+      return;
+    }
+    const now = Date.now();
+    // 1. Update customCategories.sections[partVal]
+    if (!customCategories.sections[partVal]) customCategories.sections[partVal] = [];
+    customCategories.sections[partVal] = customCategories.sections[partVal].filter(x => x !== oldSecName);
+    if (!customCategories.sections[partVal].includes(newSecName)) {
+      customCategories.sections[partVal].push(newSecName);
+    }
+    // 2. Cascade rename across customQuestions under this part + section
+    for (const q of customQuestions) {
+      if (q.p === partVal && q.c === oldChap && q.s === oldSecName) {
+        q.s = newSecName;
+        q.updatedAt = now;
+      }
+    }
+    const newKey = oldChap + " / " + newSecName;
+    if (filterSection === oldKey) filterSection = newKey;
+    if (customFilterCatVal === oldKey) customFilterCatVal = newKey;
+    const oldSk = `${partVal}||${oldChap}||${oldSecName}`;
+    const newSk = `${partVal}||${oldChap}||${newSecName}`;
+    multiSelectedKeys = multiSelectedKeys.map(k => k === oldSk ? newSk : k);
+
+    renameSecBox.classList.add("hidden");
+    saveStorage();
+    rebuildIndex();
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
+    populateCustomFormSections(partVal, newKey);
+    updateMultiFilterBarUI();
+    buildQueue();
+    renderCustomManager();
+    showToast(`小类已改名为「${newSecName}」`);
+  }
+
+  btnRenamePart.addEventListener("click", () => {
+    newPartBox.classList.add("hidden");
+    renamePartBox.classList.toggle("hidden");
+    if (!renamePartBox.classList.contains("hidden")) {
+      renamePartInput.value = customPartSelect.value || "";
+      renamePartInput.focus();
+      renamePartInput.select();
+    }
+  });
+  btnCancelRenamePart.addEventListener("click", () => renamePartBox.classList.add("hidden"));
+  btnConfirmRenamePart.addEventListener("click", confirmRenamePart);
+  renamePartInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); confirmRenamePart(); }
+  });
+
+  btnRenameSec.addEventListener("click", () => {
+    newSecBox.classList.add("hidden");
+    renameSecBox.classList.toggle("hidden");
+    if (!renameSecBox.classList.contains("hidden")) {
+      const secs = getAvailableSectionsForPart(customPartSelect.value);
+      const curObj = secs.find(x => x.key === customSectionSelect.value);
+      renameSecInput.value = curObj ? curObj.s : "";
+      renameSecInput.focus();
+      renameSecInput.select();
+    }
+  });
+  btnCancelRenameSec.addEventListener("click", () => renameSecBox.classList.add("hidden"));
+  btnConfirmRenameSec.addEventListener("click", confirmRenameSec);
+  renameSecInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); confirmRenameSec(); }
   });
 
   customFilterPart.addEventListener("change", () => {
@@ -4910,7 +5107,18 @@
     prefillOptsForSelectedCfCat();
   }
 
+  function isUserCustomCfCat(catName) {
+    if (!catName) return false;
+    return !CONFUSABLE_QUESTIONS.some(x => x.cat === catName);
+  }
+
+  function updateRenameCfCatVisibility() {
+    btnRenameCfCat.classList.toggle("hidden", !isUserCustomCfCat(addCfCatSelect.value));
+    renameCfCatBox.classList.add("hidden");
+  }
+
   function prefillOptsForSelectedCfCat() {
+    updateRenameCfCatVisibility();
     const cat = addCfCatSelect.value;
     const sample = getAllConfusableQuestions().find(x => x.cat === cat);
     if (sample && sample.type === "choice" && Array.isArray(sample.opts) && sample.opts.length >= 2) {
@@ -4999,6 +5207,56 @@
   btnConfirmNewCfCat.addEventListener("click", confirmAddCfCat);
   newCfCatInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); confirmAddCfCat(); }
+  });
+
+  function confirmRenameCfCat() {
+    const oldCat = addCfCatSelect.value;
+    const newCat = renameCfCatInput.value.trim();
+    if (!isUserCustomCfCat(oldCat)) return;
+    if (!newCat) {
+      showToast("请输入新的类别名称");
+      renameCfCatInput.focus();
+      return;
+    }
+    if (newCat === oldCat) {
+      renameCfCatBox.classList.add("hidden");
+      return;
+    }
+    const now = Date.now();
+    customCfCategories = customCfCategories.filter(x => x !== oldCat);
+    if (!getAllCfCategories().includes(newCat) && !customCfCategories.includes(newCat)) {
+      customCfCategories.push(newCat);
+    }
+    for (const q of customConfusableQuestions) {
+      if (q.cat === oldCat) {
+        q.cat = newCat;
+        q.updatedAt = now;
+      }
+    }
+    if (cfCat === oldCat) cfCat = newCat;
+    renameCfCatBox.classList.add("hidden");
+    saveStorage();
+    rebuildIndex();
+    populateCfCats();
+    populateAddCfCatSelect(newCat);
+    buildCfQueue();
+    if (activeTab === "wrong") renderWrongBook();
+    showToast(`易混淆类别已改名为「${newCat}」`);
+  }
+
+  btnRenameCfCat.addEventListener("click", () => {
+    newCfCatBox.classList.add("hidden");
+    renameCfCatBox.classList.toggle("hidden");
+    if (!renameCfCatBox.classList.contains("hidden")) {
+      renameCfCatInput.value = addCfCatSelect.value || "";
+      renameCfCatInput.focus();
+      renameCfCatInput.select();
+    }
+  });
+  btnCancelRenameCfCat.addEventListener("click", () => renameCfCatBox.classList.add("hidden"));
+  btnConfirmRenameCfCat.addEventListener("click", confirmRenameCfCat);
+  renameCfCatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); confirmRenameCfCat(); }
   });
 
   btnSaveAddCf.addEventListener("click", () => {
