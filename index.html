@@ -1372,6 +1372,39 @@
     font-weight: 600;
   }
 
+  .star-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: #9ca3af;
+    font-size: 16px;
+    line-height: 1;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .star-btn:hover {
+    border-color: #f59e0b;
+    color: #d97706;
+    background: #fffbeb;
+  }
+  .star-btn.is-starred {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #d97706;
+  }
+  .card-right-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 640px) {
@@ -1442,7 +1475,7 @@
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-meta">
         <span>进度：<strong id="progPos">0 / 0</strong> <button type="button" class="btn-link-mini" id="btnRestartQuiz">从头刷</button></span>
-        <span>本轮正确率：<strong id="progAcc">--</strong> · 总做题 <strong id="progTotalDone">0</strong> 次</span>
+        <span>本轮正确率：<strong id="progAcc">--</strong> · 总做题 <strong id="progTotalDone">0</strong> 次 · <button type="button" class="btn-link-mini" id="btnViewStarredQuiz" style="color:#b45309;">★ 已斩 <strong id="quizStarredCnt">0</strong></button></span>
       </div>
       <div class="progress-track">
         <div class="progress-bar" id="progBar"></div>
@@ -1474,7 +1507,7 @@
     <div class="progress-wrap">
       <div class="progress-meta">
         <span>进度：<strong id="cfProgPos">0 / 0</strong> <button type="button" class="btn-link-mini" id="btnRestartCf">从头刷</button></span>
-        <span>本轮掌握率：<strong id="cfProgAcc">--</strong></span>
+        <span>本轮掌握率：<strong id="cfProgAcc">--</strong> · <button type="button" class="btn-link-mini" id="btnViewStarredCf" style="color:#b45309;">★ 已斩 <strong id="cfStarredCnt">0</strong></button></span>
       </div>
       <div class="progress-track">
         <div class="progress-bar" id="cfProgBar"></div>
@@ -1780,6 +1813,7 @@
         <button type="button" class="search-pill" data-scope="question">仅搜题库</button>
         <button type="button" class="search-pill" data-scope="note">仅搜笔记</button>
         <button type="button" class="search-pill" data-scope="wrong">仅搜错题</button>
+        <button type="button" class="search-pill" data-scope="starred">★ 已彻底掌握</button>
       </div>
     </div>
     <div class="search-meta-bar">
@@ -1906,6 +1940,7 @@
   let customCfCategories = []; // user-defined confusable category names
   let addCfIsBlank = false;
   let notes = {}; // { [id]: { text, updatedAt } }
+  let starredMap = {}; // { [id]: { active: boolean, updatedAt: number } }
   let questionOverrides = {}; // { [id]: { q, ok, r, wStr, fix, updatedAt } or { pre, ans, post, full, note, updatedAt } or { _restored: true, updatedAt } }
   let modalEditId = null;
   let modalEditIsCf = false;
@@ -2144,6 +2179,10 @@
   const progPos = document.getElementById("progPos");
   const btnRestartQuiz = document.getElementById("btnRestartQuiz");
   const btnRestartCf = document.getElementById("btnRestartCf");
+  const btnViewStarredQuiz = document.getElementById("btnViewStarredQuiz");
+  const quizStarredCnt = document.getElementById("quizStarredCnt");
+  const btnViewStarredCf = document.getElementById("btnViewStarredCf");
+  const cfStarredCnt = document.getElementById("cfStarredCnt");
   const progAcc = document.getElementById("progAcc");
   const progTotalDone = document.getElementById("progTotalDone");
   const progBar = document.getElementById("progBar");
@@ -2250,6 +2289,9 @@
           if (parsed.notes && typeof parsed.notes === "object") {
             notes = parsed.notes;
           }
+          if (parsed.starredMap && typeof parsed.starredMap === "object") {
+            starredMap = parsed.starredMap;
+          }
           if (parsed.questionOverrides && typeof parsed.questionOverrides === "object") {
             questionOverrides = parsed.questionOverrides;
           }
@@ -2304,7 +2346,7 @@
 
   function saveStorage(skipAutoSync) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, questionOverrides, progressState, settings }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, starredMap, questionOverrides, progressState, settings }));
     } catch (e) {
       // Ignore storage quota / sandbox restrictions
     }
@@ -2346,6 +2388,33 @@
 
   function getRecord(id) {
     return records[id] || { attempts: 0, wrong: 0, correct: 0, lastResult: null, lastAt: 0, mastered: false };
+  }
+
+  function isStarred(id) {
+    return !!(starredMap[id] && starredMap[id].active);
+  }
+
+  function toggleStarred(id) {
+    const next = !isStarred(id);
+    starredMap[id] = { active: next, updatedAt: Date.now() };
+    saveStorage();
+    updateNavBadges();
+    updateStarredCounts();
+    showToast(next ? "★ 已彻底掌握，后续不再出现在题库中" : "☆ 已取消彻底掌握，恢复到题库中");
+    return next;
+  }
+
+  function updateStarredCounts() {
+    let qCnt = 0;
+    for (const q of getAllQuestions()) {
+      if (isStarred(q.id)) qCnt += 1;
+    }
+    let cfCnt = 0;
+    for (const c of getAllConfusableQuestions()) {
+      if (isStarred(c.id)) cfCnt += 1;
+    }
+    if (quizStarredCnt) quizStarredCnt.textContent = String(qCnt);
+    if (cfStarredCnt) cfStarredCnt.textContent = String(cfCnt);
   }
 
   function getNoteText(id) {
@@ -2582,7 +2651,7 @@
     let cnt = 0;
     for (const id in records) {
       const r = records[id];
-      if (r && r.wrong > 0 && !r.mastered && hasAnyQuestion(id)) cnt++;
+      if (r && r.wrong > 0 && !r.mastered && !isStarred(id) && hasAnyQuestion(id)) cnt++;
     }
     return cnt;
   }
@@ -2713,6 +2782,7 @@
     }
     const multiSet = multiSelectedKeys.length > 0 ? new Set(multiSelectedKeys) : null;
     let list = getAllQuestions().filter(q => {
+      if (isStarred(q.id)) return false;
       if (multiSet) {
         return multiSet.has(`${q.p}||${q.c}||${q.s}`);
       }
@@ -2873,7 +2943,13 @@
             <span class="tag tag-soft">${escapeHtml(q.s)} · 第 ${q.n} 题</span>
             ${(q.isCustom || String(q.id).startsWith("c_")) ? '<span class="custom-badge">自定义</span>' : ""}
           </div>
-          <div class="stat-badges">${answered ? badgeHtml : ""}</div>
+          <div class="card-right-meta">
+            <div class="card-right-meta">
+            <div class="stat-badges">${answered ? badgeHtml : ""}</div>
+            <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""}" id="btnStarCf" title="${isStarred(item.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(item.id) ? "★" : "☆"}</button>
+          </div>
+            <button type="button" class="star-btn ${isStarred(q.id) ? "is-starred" : ""}" id="btnStarQuiz" title="${isStarred(q.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(q.id) ? "★" : "☆"}</button>
+          </div>
         </div>
         <p class="question-text">${escapeHtml(q.q)}</p>
         <div class="choice-grid">
@@ -2918,6 +2994,14 @@
     if (btnMaster) {
       btnMaster.addEventListener("click", () => {
         toggleMastered(q.id);
+        renderQuiz();
+      });
+    }
+    updateStarredCounts();
+    const btnStarQ = document.getElementById("btnStarQuiz");
+    if (btnStarQ) {
+      btnStarQ.addEventListener("click", () => {
+        toggleStarred(q.id);
         renderQuiz();
       });
     }
@@ -3511,7 +3595,7 @@
       renderConfusable();
       return;
     }
-    let list = getAllConfusableQuestions().filter(q => cfCat === "ALL" || q.cat === cfCat);
+    let list = getAllConfusableQuestions().filter(q => !isStarred(q.id) && (cfCat === "ALL" || q.cat === cfCat));
     if (cfMode === "wrong" || cfMode === "wrongRand") {
       list = list.filter(q => {
         const r = getRecord(q.id);
@@ -3782,6 +3866,14 @@
     if (btnM) {
       btnM.addEventListener("click", () => {
         toggleMastered(item.id);
+        renderConfusable();
+      });
+    }
+    updateStarredCounts();
+    const btnStarC = document.getElementById("btnStarCf");
+    if (btnStarC) {
+      btnStarC.addEventListener("click", () => {
+        toggleStarred(item.id);
         renderConfusable();
       });
     }
@@ -4493,6 +4585,18 @@
       }
     }
 
+    // 2.52 Merge starredMap (latest updatedAt wins)
+    if (remote.starredMap && typeof remote.starredMap === "object") {
+      for (const id in remote.starredMap) {
+        const rs = remote.starredMap[id];
+        if (!rs || typeof rs !== "object") continue;
+        const ls = starredMap[id];
+        if (!ls || (rs.updatedAt || 0) >= (ls.updatedAt || 0)) {
+          starredMap[id] = rs;
+        }
+      }
+    }
+
     // 2.55 Merge questionOverrides (latest updatedAt wins)
     if (remote.questionOverrides && typeof remote.questionOverrides === "object") {
       for (const id in remote.questionOverrides) {
@@ -4657,6 +4761,7 @@
         deletedCustomCfIds,
         customCfCategories,
         notes,
+        starredMap,
         questionOverrides,
         progressState,
         settings
@@ -5447,8 +5552,8 @@
     const kwLower = kw.toLowerCase();
     const allItems = getUnifiedWrongSource();
 
-    // If scope is "note" and kw is empty, show all items that have a note!
-    if (!kw && searchScope !== "note") {
+    // If scope is "note" or "starred" and kw is empty, list all matching items directly!
+    if (!kw && searchScope !== "note" && searchScope !== "starred") {
       lastSearchTfIds = [];
       btnPracticeSearch.classList.add("hidden");
       const noteCnt = Object.values(notes).filter(n => n && n.text && n.text.trim()).length;
@@ -5469,6 +5574,7 @@
 
       if (searchScope === "note" && !noteText) continue;
       if (searchScope === "wrong" && rec.wrong <= 0) continue;
+      if (searchScope === "starred" && !isStarred(item.id)) continue;
 
       const qText = item.isCf ? (item.cf.full || (item.cf.pre + item.cf.ans + item.cf.post)) : item.q;
       const fixText = item.isCf ? (item.cf.ans + " " + (item.cf.note || "")) : (item.fix || "");
@@ -5479,7 +5585,7 @@
         const inNote = noteText.toLowerCase().includes(kwLower);
         if (searchScope === "question" && !inQ) continue;
         if (searchScope === "note" && !inNote) continue;
-        if ((searchScope === "all" || searchScope === "wrong") && !inQ && !inNote) continue;
+        if ((searchScope === "all" || searchScope === "wrong" || searchScope === "starred") && !inQ && !inNote) continue;
       }
       matches.push({ item, rec, noteText, qText, fixText });
     }
@@ -5534,7 +5640,8 @@
           ${noteHtml}
           <div class="search-item-foot">
             <span>${escapeHtml(item.p)}</span>
-            <div style="display:flex;gap:6px;">
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""} js-search-star" style="width:28px;height:28px;font-size:14px;" data-id="${item.id}" title="${isStarred(item.id) ? "取消彻底掌握" : "点亮彻底掌握"}">${isStarred(item.id) ? "★" : "☆"}</button>
               <button type="button" class="btn btn-sm js-search-edit" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">编辑</button>
               <button type="button" class="btn btn-sm btn-primary js-search-jump" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">去刷这题</button>
             </div>
@@ -5577,7 +5684,26 @@
     showToast(`已载入搜索结果中的 ${lastSearchTfIds.length} 道题（可随时返回原进度）`);
   });
 
+  function openStarredList() {
+    searchScope = "starred";
+    searchInput.value = "";
+    for (const b of searchScopeGroup.querySelectorAll(".search-pill")) {
+      b.classList.toggle("active", b.dataset.scope === "starred");
+    }
+    openSearchModal();
+  }
+  btnViewStarredQuiz.addEventListener("click", openStarredList);
+  btnViewStarredCf.addEventListener("click", openStarredList);
+
   searchResults.addEventListener("click", (e) => {
+    const starBtn = e.target.closest(".js-search-star");
+    if (starBtn) {
+      toggleStarred(starBtn.dataset.id);
+      buildQueue();
+      buildCfQueue();
+      renderSearchResults();
+      return;
+    }
     const editBtn = e.target.closest(".js-search-edit");
     if (editBtn) {
       openEditQuestionModal(editBtn.dataset.id, editBtn.dataset.cf === "1");
@@ -5621,7 +5747,7 @@
   });
 
   btnExport.addEventListener("click", () => {
-    const payload = JSON.stringify({ version: 6, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, questionOverrides, progressState, settings }, null, 2);
+    const payload = JSON.stringify({ version: 7, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, starredMap, questionOverrides, progressState, settings }, null, 2);
     const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -5656,6 +5782,7 @@
           };
         }
         if (parsed.notes && typeof parsed.notes === "object") notes = parsed.notes;
+        if (parsed.starredMap && typeof parsed.starredMap === "object") starredMap = parsed.starredMap;
         if (parsed.questionOverrides && typeof parsed.questionOverrides === "object") questionOverrides = parsed.questionOverrides;
         if (Array.isArray(parsed.customConfusableQuestions)) customConfusableQuestions = parsed.customConfusableQuestions;
         if (Array.isArray(parsed.deletedCustomCfIds)) deletedCustomCfIds = parsed.deletedCustomCfIds;
@@ -5779,6 +5906,7 @@
   populateSectionSelect();
   populateCustomFormDropdowns(BUILTIN_PARTS[0], null);
   populateCfCats();
+  updateStarredCounts();
   buildCfQueue();
   buildQueue();
   if (progressState.activeTab && ["quiz", "confusable", "wrong", "custom"].includes(progressState.activeTab)) {
