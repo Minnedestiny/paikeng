@@ -1542,6 +1542,7 @@
           <div class="select-with-add">
             <select class="select-box" id="customSectionSelect"></select>
             <button type="button" class="btn-add-mini hidden" id="btnRenameSec" title="修改当前自定义小类名称">改名</button>
+            <button type="button" class="btn-add-mini hidden" id="btnDeleteSec" style="border-color:var(--err-border);background:var(--err-bg);color:var(--err);" title="删除当前自定义小类并归入上一级大类">删除</button>
             <button type="button" class="btn-add-mini" id="btnAddNewSec">+ 新建</button>
           </div>
           <div class="inline-add-box hidden" id="newSecBox">
@@ -1550,9 +1551,14 @@
             <button type="button" class="btn btn-sm" id="btnCancelNewSec">取消</button>
           </div>
           <div class="inline-add-box hidden" id="renameSecBox">
-            <input type="text" class="text-input" id="renameSecInput" placeholder="输入修改后的小类名称">
+            <input type="text" class="text-input" id="renameSecInput" placeholder="输入新名称（留空保存=去掉小类归入上一级）">
             <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenameSec">保存</button>
             <button type="button" class="btn btn-sm" id="btnCancelRenameSec">取消</button>
+          </div>
+          <div class="inline-add-box hidden" id="deleteSecBox" style="background:var(--err-bg);border:1px solid var(--err-border);padding:6px 8px;border-radius:8px;font-size:12.5px;color:var(--err);">
+            <span id="deleteSecMsg" style="flex:1;min-width:0;"></span>
+            <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDeleteSec">确认删除</button>
+            <button type="button" class="btn btn-sm" id="btnCancelDeleteSec">取消</button>
           </div>
         </div>
       </div>
@@ -2088,6 +2094,11 @@
   const renameSecInput = document.getElementById("renameSecInput");
   const btnConfirmRenameSec = document.getElementById("btnConfirmRenameSec");
   const btnCancelRenameSec = document.getElementById("btnCancelRenameSec");
+  const btnDeleteSec = document.getElementById("btnDeleteSec");
+  const deleteSecBox = document.getElementById("deleteSecBox");
+  const deleteSecMsg = document.getElementById("deleteSecMsg");
+  const btnConfirmDeleteSec = document.getElementById("btnConfirmDeleteSec");
+  const btnCancelDeleteSec = document.getElementById("btnCancelDeleteSec");
   const btnTypeFalse = document.getElementById("btnTypeFalse");
   const btnTypeTrue = document.getElementById("btnTypeTrue");
   const customQuestion = document.getElementById("customQuestion");
@@ -3185,8 +3196,9 @@
         list.push({ key, c: q.c, s: q.s });
       }
     }
-    if (list.length === 0) {
-      list.push({ key: CUSTOM_CHAPTER + " / 默认小类", c: CUSTOM_CHAPTER, s: "默认小类" });
+    const directKey = partVal + " / 直属大类";
+    if (!seen.has(directKey)) {
+      list.push({ key: directKey, c: partVal, s: "直属大类" });
     }
     return list;
   }
@@ -3228,6 +3240,7 @@
 
   function isUserCustomSection(partVal, secKey) {
     if (!partVal || !secKey) return false;
+    if (secKey === partVal + " / 直属大类") return false;
     const builtinSecs = BUILTIN_PART_SECTIONS.get(partVal) || [];
     return !builtinSecs.some(x => x.key === secKey);
   }
@@ -3235,10 +3248,13 @@
   function updateRenameCustomBtnVisibility() {
     const pVal = customPartSelect.value;
     const sKey = customSectionSelect.value;
+    const canEditSec = isUserCustomSection(pVal, sKey);
     btnRenamePart.classList.toggle("hidden", !isUserCustomPart(pVal));
-    btnRenameSec.classList.toggle("hidden", !isUserCustomSection(pVal, sKey));
+    btnRenameSec.classList.toggle("hidden", !canEditSec);
+    btnDeleteSec.classList.toggle("hidden", !canEditSec);
     renamePartBox.classList.add("hidden");
     renameSecBox.classList.add("hidden");
+    deleteSecBox.classList.add("hidden");
   }
 
   function resetCustomForm(keepCategory) {
@@ -3971,8 +3987,7 @@
     const oldSecName = curObj.s;
     const newSecName = renameSecInput.value.trim();
     if (!newSecName) {
-      showToast("请输入新的小类名称");
-      renameSecInput.focus();
+      deleteCurrentCustomSection();
       return;
     }
     if (newSecName === oldSecName) {
@@ -4044,6 +4059,76 @@
   renameSecInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); confirmRenameSec(); }
   });
+
+  function deleteCurrentCustomSection() {
+    const partVal = customPartSelect.value;
+    const oldKey = customSectionSelect.value;
+    if (!isUserCustomSection(partVal, oldKey)) return;
+    const secs = getAvailableSectionsForPart(partVal);
+    const curObj = secs.find(x => x.key === oldKey);
+    if (!curObj) return;
+    const oldChap = curObj.c;
+    const oldSecName = curObj.s;
+    const now = Date.now();
+
+    // 1. Remove from customCategories.sections[partVal]
+    if (customCategories.sections && Array.isArray(customCategories.sections[partVal])) {
+      customCategories.sections[partVal] = customCategories.sections[partVal].filter(x => x !== oldSecName);
+    }
+
+    // 2. Move all customQuestions in this section up to the parent Part (direct under partVal)
+    let movedCount = 0;
+    const targetChap = partVal;
+    const targetSec = "直属大类";
+    for (const q of customQuestions) {
+      if (q.p === partVal && q.c === oldChap && q.s === oldSecName) {
+        q.c = targetChap;
+        q.s = targetSec;
+        q.updatedAt = now;
+        movedCount += 1;
+      }
+    }
+
+    // 3. Update active filters & multiSelectedKeys
+    const newKey = targetChap + " / " + targetSec;
+    if (filterSection === oldKey) filterSection = "ALL";
+    if (customFilterCatVal === oldKey) customFilterCatVal = "ALL";
+    const oldSk = `${partVal}||${oldChap}||${oldSecName}`;
+    const newSk = `${partVal}||${targetChap}||${targetSec}`;
+    multiSelectedKeys = [...new Set(multiSelectedKeys.map(k => k === oldSk ? newSk : k))];
+
+    renameSecBox.classList.add("hidden");
+    deleteSecBox.classList.add("hidden");
+    saveStorage();
+    rebuildIndex();
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
+    populateCustomFormSections(partVal, newKey);
+    updateMultiFilterBarUI();
+    buildQueue();
+    renderCustomManager();
+    showToast(movedCount > 0
+      ? `已去掉小类「${oldSecName}」，旗下 ${movedCount} 题已自动归入「${partVal}」`
+      : `已删除小类「${oldSecName}」`);
+  }
+
+  btnDeleteSec.addEventListener("click", () => {
+    newSecBox.classList.add("hidden");
+    renameSecBox.classList.add("hidden");
+    const partVal = customPartSelect.value;
+    const oldKey = customSectionSelect.value;
+    const secs = getAvailableSectionsForPart(partVal);
+    const curObj = secs.find(x => x.key === oldKey);
+    if (!curObj) return;
+    const cnt = customQuestions.filter(q => q.p === partVal && q.c === curObj.c && q.s === curObj.s).length;
+    deleteSecMsg.textContent = cnt > 0
+      ? `去掉小类「${curObj.s}」后，旗下 ${cnt} 道题将自动归入「${partVal}」：`
+      : `确认删除空小类「${curObj.s}」？`;
+    deleteSecBox.classList.toggle("hidden");
+  });
+  btnCancelDeleteSec.addEventListener("click", () => deleteSecBox.classList.add("hidden"));
+  btnConfirmDeleteSec.addEventListener("click", deleteCurrentCustomSection);
 
   customFilterPart.addEventListener("change", () => {
     customFilterPartVal = customFilterPart.value;
