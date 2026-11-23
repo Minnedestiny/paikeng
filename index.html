@@ -721,7 +721,7 @@
   }
   .custom-form-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 12px;
     margin-bottom: 12px;
   }
@@ -730,6 +730,13 @@
     flex-direction: column;
     gap: 6px;
     margin-bottom: 12px;
+    min-width: 0;
+  }
+  .form-field > .select-box {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
   }
   .form-field label {
     font-size: 13px;
@@ -1438,6 +1445,9 @@
       <button type="button" class="nav-tab" id="tabCustom">
         自定义 <span class="count-pill count-pill-primary" id="navCustomCount">0</span>
       </button>
+      <button type="button" class="nav-tab" id="tabStarred">
+        ★ 已斩 <span class="count-pill" id="navStarredCount" style="background:#fef3c7;color:#b45309;">0</span>
+      </button>
     </nav>
     <div class="topbar-right">
       <button type="button" class="icon-btn" id="btnOpenSearch" title="搜索题库与笔记">搜索</button>
@@ -1652,6 +1662,32 @@
     </div>
 
     <div class="wb-list" id="customList"></div>
+  </section>
+
+  <!-- Starred (Mastered/Retired) Questions View -->
+  <section id="viewStarred" class="hidden">
+    <div class="wb-summary" id="starredSummary" style="grid-template-columns:repeat(3,minmax(0,1fr));"></div>
+
+    <div class="panel">
+      <div class="filter-row" style="margin-top:0;padding-top:0;border-top:none;">
+        <select class="select-box" id="starredFilterCat" aria-label="按分类筛选已斩题目"></select>
+        <input type="text" class="text-input" id="starredSearch" style="flex:1 1 150px;padding:7px 10px;font-size:13px;" placeholder="搜索已斩题干、改法或笔记…">
+      </div>
+      <div class="controls-row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <button type="button" class="btn btn-primary" id="btnPracticeStarredTf">刷已斩判断题</button>
+          <button type="button" class="btn btn-primary" id="btnPracticeStarredCf">刷已斩易混淆</button>
+        </div>
+        <button type="button" class="btn btn-danger" id="btnAskUnstarAll">批量剔除已斩</button>
+      </div>
+      <div class="inline-add-box hidden" id="unstarAllConfirmBox" style="margin-top:10px;background:var(--err-bg);border:1px solid var(--err-border);padding:8px 10px;border-radius:8px;font-size:12.5px;color:var(--err);flex-wrap:wrap;">
+        <span id="unstarAllConfirmMsg" style="flex:1 1 180px;min-width:0;">确认将当前筛选出的已斩题目全部移回题库吗？</span>
+        <button type="button" class="btn btn-sm btn-danger" id="btnConfirmUnstarAll">确认剔除</button>
+        <button type="button" class="btn btn-sm" id="btnCancelUnstarAll">取消</button>
+      </div>
+    </div>
+
+    <div class="wb-list" id="starredList"></div>
   </section>
 </main>
 
@@ -2135,11 +2171,27 @@
   const cfCardArea = document.getElementById("cfCardArea");
   const cfShortcutHint = document.getElementById("cfShortcutHint");
   const tabCustom = document.getElementById("tabCustom");
+  const tabStarred = document.getElementById("tabStarred");
   const navWrongCount = document.getElementById("navWrongCount");
   const navCustomCount = document.getElementById("navCustomCount");
+  const navStarredCount = document.getElementById("navStarredCount");
   const viewQuiz = document.getElementById("viewQuiz");
   const viewWrong = document.getElementById("viewWrong");
   const viewCustom = document.getElementById("viewCustom");
+  const viewStarred = document.getElementById("viewStarred");
+  const starredSummary = document.getElementById("starredSummary");
+  const starredFilterCat = document.getElementById("starredFilterCat");
+  const starredSearch = document.getElementById("starredSearch");
+  const btnPracticeStarredTf = document.getElementById("btnPracticeStarredTf");
+  const btnPracticeStarredCf = document.getElementById("btnPracticeStarredCf");
+  const btnAskUnstarAll = document.getElementById("btnAskUnstarAll");
+  const unstarAllConfirmBox = document.getElementById("unstarAllConfirmBox");
+  const unstarAllConfirmMsg = document.getElementById("unstarAllConfirmMsg");
+  const btnConfirmUnstarAll = document.getElementById("btnConfirmUnstarAll");
+  const btnCancelUnstarAll = document.getElementById("btnCancelUnstarAll");
+  const starredList = document.getElementById("starredList");
+  let starredFilterVal = "ALL";
+  let starredSearchVal = "";
 
   const customFormTitle = document.getElementById("customFormTitle");
   const customPartSelect = document.getElementById("customPartSelect");
@@ -2517,6 +2569,7 @@
     }
     if (quizStarredCnt) quizStarredCnt.textContent = String(qCnt);
     if (cfStarredCnt) cfStarredCnt.textContent = String(cfCnt);
+    if (navStarredCount) navStarredCount.textContent = String(qCnt + cfCnt);
   }
 
   function renderStarBtnHtml(id, btnId, extraClass, compact) {
@@ -4065,15 +4118,19 @@
     tabConfusable.classList.toggle("active", tab === "confusable");
     tabWrong.classList.toggle("active", tab === "wrong");
     tabCustom.classList.toggle("active", tab === "custom");
+    tabStarred.classList.toggle("active", tab === "starred");
     viewQuiz.classList.toggle("hidden", tab !== "quiz");
     viewConfusable.classList.toggle("hidden", tab !== "confusable");
     viewWrong.classList.toggle("hidden", tab !== "wrong");
     viewCustom.classList.toggle("hidden", tab !== "custom");
+    viewStarred.classList.toggle("hidden", tab !== "starred");
     renderReturnBanners();
     if (tab === "wrong") {
       renderWrongBook();
     } else if (tab === "custom") {
       renderCustomManager();
+    } else if (tab === "starred") {
+      renderStarredManager();
     } else if (tab === "confusable") {
       renderConfusable();
     } else {
@@ -4086,6 +4143,7 @@
   tabConfusable.addEventListener("click", () => switchTab("confusable"));
   tabWrong.addEventListener("click", () => switchTab("wrong"));
   tabCustom.addEventListener("click", () => switchTab("custom"));
+  tabStarred.addEventListener("click", () => switchTab("starred"));
 
   cfModeGroup.addEventListener("click", (e) => {
     const btn = e.target.closest(".mode-btn");
@@ -5256,6 +5314,7 @@
     }
     if (activeTab === "wrong") renderWrongBook();
     else if (activeTab === "custom") renderCustomManager();
+    else if (activeTab === "starred") renderStarredManager();
     else if (activeTab === "confusable") { if (!rebuildQueues) renderConfusable(); }
     else { if (!rebuildQueues) renderQuiz(); }
     if (searchModal.classList.contains("open")) renderSearchResults();
@@ -6094,8 +6153,246 @@
     }
     openSearchModal();
   }
-  btnViewStarredQuiz.addEventListener("click", openStarredList);
-  btnViewStarredCf.addEventListener("click", openStarredList);
+  btnViewStarredQuiz.addEventListener("click", () => switchTab("starred"));
+  btnViewStarredCf.addEventListener("click", () => switchTab("starred"));
+
+  // Starred (Retired/Mastered) Questions Manager
+  function getStarredEntries() {
+    const entries = [];
+    for (const q of getAllQuestions()) {
+      if (isStarred(q.id)) {
+        entries.push({ id: q.id, isCf: false, q, catKey: q.p, updatedAt: (starredMap[q.id] && starredMap[q.id].updatedAt) || 0 });
+      }
+    }
+    for (const cf of getAllConfusableQuestions()) {
+      if (isStarred(cf.id)) {
+        entries.push({ id: cf.id, isCf: true, cf, catKey: CONFUSABLE_PART, updatedAt: (starredMap[cf.id] && starredMap[cf.id].updatedAt) || 0 });
+      }
+    }
+    entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    return entries;
+  }
+
+  function getFilteredStarredEntries(allEntries) {
+    const kw = starredSearchVal.trim().toLowerCase();
+    return allEntries.filter(item => {
+      if (starredFilterVal !== "ALL" && item.catKey !== starredFilterVal) return false;
+      if (kw) {
+        const noteText = getNoteText(item.id);
+        const hay = item.isCf
+          ? `${item.cf.cat} ${item.cf.full || (item.cf.pre + item.cf.ans + item.cf.post)} ${item.cf.note || ""} ${noteText}`
+          : `${item.q.p} ${item.q.c} ${item.q.s} ${item.q.q} ${item.q.fix || ""} ${noteText}`;
+        if (!hay.toLowerCase().includes(kw)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderStarredManager() {
+    updateStarredCounts();
+    unstarAllConfirmBox.classList.add("hidden");
+    const allEntries = getStarredEntries();
+    const tfTotal = allEntries.filter(x => !x.isCf).length;
+    const cfTotal = allEntries.filter(x => x.isCf).length;
+
+    starredSummary.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-val" style="color:#b45309;">${allEntries.length}</div>
+        <div class="stat-lbl">已斩题目总数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val is-primary">${tfTotal}</div>
+        <div class="stat-lbl">判断题已斩</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val is-ok">${cfTotal}</div>
+        <div class="stat-lbl">易混淆已斩</div>
+      </div>
+    `;
+
+    // Populate category filter
+    const catCounts = new Map();
+    const catOrder = [];
+    for (const item of allEntries) {
+      if (!catCounts.has(item.catKey)) catOrder.push(item.catKey);
+      catCounts.set(item.catKey, (catCounts.get(item.catKey) || 0) + 1);
+    }
+    starredFilterCat.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "ALL";
+    optAll.textContent = `全部已斩分类（共 ${allEntries.length} 题）`;
+    starredFilterCat.appendChild(optAll);
+    for (const k of catOrder) {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = `${k}（${catCounts.get(k)} 题）`;
+      starredFilterCat.appendChild(opt);
+    }
+    if ([...starredFilterCat.options].some(o => o.value === starredFilterVal)) {
+      starredFilterCat.value = starredFilterVal;
+    } else {
+      starredFilterVal = "ALL";
+      starredFilterCat.value = "ALL";
+    }
+
+    const filtered = getFilteredStarredEntries(allEntries);
+    const filteredTf = filtered.filter(x => !x.isCf);
+    const filteredCf = filtered.filter(x => x.isCf);
+    btnPracticeStarredTf.disabled = filteredTf.length === 0;
+    btnPracticeStarredTf.textContent = filteredTf.length > 0 ? `刷已斩判断题 (${filteredTf.length})` : "刷已斩判断题";
+    btnPracticeStarredCf.disabled = filteredCf.length === 0;
+    btnPracticeStarredCf.textContent = filteredCf.length > 0 ? `刷已斩易混淆 (${filteredCf.length})` : "刷已斩易混淆";
+    btnAskUnstarAll.disabled = filtered.length === 0;
+
+    if (filtered.length === 0) {
+      starredList.innerHTML = `
+        <div class="empty-state">
+          <p class="empty-title">${allEntries.length === 0 ? "还没有已斩题目" : "没有匹配的已斩题目"}</p>
+          <p class="empty-desc">${allEntries.length === 0 ? "刷题时点击题目右上角的 ☆ 即可点亮 ★ 斩掉该题，彻底掌握的题目都会汇总在这里，随时可以复习或剔除恢复。" : "试试更换分类筛选或清空搜索关键词。"}</p>
+        </div>
+      `;
+      return;
+    }
+
+    starredList.innerHTML = filtered.map(item => {
+      const noteText = getNoteText(item.id);
+      const noteHtml = noteText ? `<div class="wb-note-strip"><strong>笔记：</strong>${escapeHtml(noteText)}</div>` : "";
+      if (item.isCf) {
+        const cf = item.cf;
+        const fullText = cf.full || (cf.pre + cf.ans + cf.post);
+        const ansHtml = `<div class="correction-line"><span class="correction-label">核心考点</span><span>${escapeHtml(cf.ans)}${cf.note ? " · " + escapeHtml(cf.note) : ""}</span></div>`;
+        return `
+          <div class="wb-item">
+            <div class="wb-item-head">
+              <div class="breadcrumb">
+                <span class="tag">${escapeHtml(CONFUSABLE_PART)}</span>
+                <span class="tag tag-soft">${escapeHtml(cf.cat)}</span>
+              </div>
+              <div class="stat-badges"><span class="ok-badge" style="background:#fef3c7;color:#b45309;border-color:#fde68a;">★ 已斩</span></div>
+            </div>
+            <div class="wb-item-q">${escapeHtml(fullText)}</div>
+            ${ansHtml}
+            ${noteHtml}
+            <div class="wb-item-foot">
+              <span>${cf.type === "blank" ? "挖空记忆" : "易混选词"}</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="btn btn-sm js-starred-jump" data-id="${item.id}" data-cf="1">去刷这题</button>
+                <button type="button" class="btn btn-sm js-starred-edit" data-id="${item.id}" data-cf="1">编辑</button>
+                <button type="button" class="btn btn-sm btn-danger js-starred-remove" data-id="${item.id}">剔除已斩</button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        const q = item.q;
+        const ansHtml = q.ok
+          ? `<div class="correction-line"><span class="correction-label" style="color:var(--ok);">正确表述</span><span>本题表述正确</span></div>`
+          : `<div class="correction-line"><span class="correction-label">正确改法</span><span>${escapeHtml(q.fix || "见错词标注")}</span></div>`;
+        return `
+          <div class="wb-item">
+            <div class="wb-item-head">
+              <div class="breadcrumb">${renderQuestionTagsHtml(q, true, true)}</div>
+              <div class="stat-badges"><span class="ok-badge" style="background:#fef3c7;color:#b45309;border-color:#fde68a;">★ 已斩</span></div>
+            </div>
+            <div class="wb-item-q">${renderAnnotatedQuestion(q)}</div>
+            ${ansHtml}
+            ${noteHtml}
+            <div class="wb-item-foot">
+              <span>${escapeHtml(q.p)}</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="btn btn-sm js-starred-jump" data-id="${item.id}" data-cf="0">去刷这题</button>
+                <button type="button" class="btn btn-sm js-starred-edit" data-id="${item.id}" data-cf="0">编辑</button>
+                <button type="button" class="btn btn-sm btn-danger js-starred-remove" data-id="${item.id}">剔除已斩</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }).join("");
+  }
+
+  starredFilterCat.addEventListener("change", () => {
+    starredFilterVal = starredFilterCat.value;
+    renderStarredManager();
+  });
+  starredSearch.addEventListener("input", () => {
+    starredSearchVal = starredSearch.value;
+    renderStarredManager();
+  });
+
+  btnPracticeStarredTf.addEventListener("click", () => {
+    const items = getFilteredStarredEntries(getStarredEntries()).filter(x => !x.isCf);
+    if (items.length === 0) return;
+    captureBookmarkIfNeeded();
+    switchTab("quiz");
+    buildQueue(items.map(x => x.id));
+    renderReturnBanners();
+    showToast(`已载入 ${items.length} 道已斩判断题开始复习`);
+  });
+
+  btnPracticeStarredCf.addEventListener("click", () => {
+    const items = getFilteredStarredEntries(getStarredEntries()).filter(x => x.isCf);
+    if (items.length === 0) return;
+    captureBookmarkIfNeeded();
+    switchTab("confusable");
+    buildCfQueue(items.map(x => x.id));
+    renderReturnBanners();
+    showToast(`已载入 ${items.length} 道已斩易混淆题开始复习`);
+  });
+
+  btnAskUnstarAll.addEventListener("click", () => {
+    const items = getFilteredStarredEntries(getStarredEntries());
+    if (items.length === 0) return;
+    unstarAllConfirmMsg.textContent = `确认将当前筛选出的 ${items.length} 道已斩题目全部剔除并移回题库吗？`;
+    unstarAllConfirmBox.classList.toggle("hidden");
+  });
+  btnCancelUnstarAll.addEventListener("click", () => unstarAllConfirmBox.classList.add("hidden"));
+  btnConfirmUnstarAll.addEventListener("click", () => {
+    const items = getFilteredStarredEntries(getStarredEntries());
+    const now = Date.now();
+    for (const item of items) {
+      starredMap[item.id] = { active: false, updatedAt: now };
+    }
+    unstarAllConfirmBox.classList.add("hidden");
+    saveStorage();
+    updateNavBadges();
+    updateStarredCounts();
+    buildQueue();
+    buildCfQueue();
+    renderStarredManager();
+    showToast(`已将 ${items.length} 道题目移回题库`);
+  });
+
+  starredList.addEventListener("click", (e) => {
+    const rmBtn = e.target.closest(".js-starred-remove");
+    if (rmBtn) {
+      toggleStarred(rmBtn.dataset.id);
+      buildQueue();
+      buildCfQueue();
+      renderStarredManager();
+      return;
+    }
+    const editBtn = e.target.closest(".js-starred-edit");
+    if (editBtn) {
+      openEditQuestionModal(editBtn.dataset.id, editBtn.dataset.cf === "1");
+      return;
+    }
+    const jumpBtn = e.target.closest(".js-starred-jump");
+    if (jumpBtn) {
+      const id = jumpBtn.dataset.id;
+      const isCf = jumpBtn.dataset.cf === "1";
+      captureBookmarkIfNeeded();
+      if (isCf) {
+        switchTab("confusable");
+        buildCfQueue([id]);
+        renderReturnBanners();
+      } else {
+        switchTab("quiz");
+        buildQueue([id]);
+        renderReturnBanners();
+      }
+    }
+  });
 
   searchResults.addEventListener("click", (e) => {
     const starBtn = e.target.closest(".js-search-star");
