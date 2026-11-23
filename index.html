@@ -2944,10 +2944,7 @@
             ${(q.isCustom || String(q.id).startsWith("c_")) ? '<span class="custom-badge">自定义</span>' : ""}
           </div>
           <div class="card-right-meta">
-            <div class="card-right-meta">
             <div class="stat-badges">${answered ? badgeHtml : ""}</div>
-            <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""}" id="btnStarCf" title="${isStarred(item.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(item.id) ? "★" : "☆"}</button>
-          </div>
             <button type="button" class="star-btn ${isStarred(q.id) ? "is-starred" : ""}" id="btnStarQuiz" title="${isStarred(q.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(q.id) ? "★" : "☆"}</button>
           </div>
         </div>
@@ -3822,7 +3819,10 @@
             <span class="tag tag-soft">${item.type === "blank" ? "挖空记忆" : "易混选词"}</span>
             ${(item.isCustom || String(item.id).startsWith("ccf_")) ? '<span class="custom-badge">自定义</span>' : ""}
           </div>
-          <div class="stat-badges">${answered ? badgeHtml : ""}</div>
+          <div class="card-right-meta">
+            <div class="stat-badges">${answered ? badgeHtml : ""}</div>
+            <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""}" id="btnStarCf" title="${isStarred(item.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(item.id) ? "★" : "☆"}</button>
+          </div>
         </div>
         <p class="question-text">${promptHtml}</p>
         ${controlsHtml}
