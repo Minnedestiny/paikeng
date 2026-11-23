@@ -1941,7 +1941,7 @@
   let records = {}; // { [id]: { attempts, wrong, correct, lastResult, lastAt, mastered } }
   let customQuestions = []; // user-created questions with same schema
   let deletedCustomIds = []; // track deleted custom IDs for clean cloud merge
-  let customCategories = { parts: [], sections: {} }; // user-defined parts & sections per part
+  let customCategories = { parts: [], sections: {}, partMeta: {}, secMeta: {} }; // user-defined parts & sections per part + sync tombstones
   let customConfusableQuestions = []; // user-created confusable questions
   let deletedCustomCfIds = []; // deleted custom confusable IDs
   let customCfCategories = []; // user-defined confusable category names
@@ -2296,7 +2296,9 @@
           if (parsed.customCategories && typeof parsed.customCategories === "object") {
             customCategories = {
               parts: Array.isArray(parsed.customCategories.parts) ? parsed.customCategories.parts : [],
-              sections: (parsed.customCategories.sections && typeof parsed.customCategories.sections === "object") ? parsed.customCategories.sections : {}
+              sections: (parsed.customCategories.sections && typeof parsed.customCategories.sections === "object") ? parsed.customCategories.sections : {},
+              partMeta: (parsed.customCategories.partMeta && typeof parsed.customCategories.partMeta === "object") ? parsed.customCategories.partMeta : {},
+              secMeta: (parsed.customCategories.secMeta && typeof parsed.customCategories.secMeta === "object") ? parsed.customCategories.secMeta : {}
             };
           }
           if (parsed.notes && typeof parsed.notes === "object") {
@@ -2356,6 +2358,28 @@
     try {
       localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(syncCfg));
     } catch (e) {}
+  }
+
+  function ensureCatMeta() {
+    if (!customCategories || typeof customCategories !== "object") {
+      customCategories = { parts: [], sections: {}, partMeta: {}, secMeta: {} };
+    }
+    if (!Array.isArray(customCategories.parts)) customCategories.parts = [];
+    if (!customCategories.sections || typeof customCategories.sections !== "object") customCategories.sections = {};
+    if (!customCategories.partMeta || typeof customCategories.partMeta !== "object") customCategories.partMeta = {};
+    if (!customCategories.secMeta || typeof customCategories.secMeta !== "object") customCategories.secMeta = {};
+  }
+
+  function markPartMeta(pName, active, ts) {
+    if (!pName) return;
+    ensureCatMeta();
+    customCategories.partMeta[pName] = { active: !!active, updatedAt: ts || Date.now() };
+  }
+
+  function markSecMeta(partVal, sName, active, ts) {
+    if (!partVal || !sName) return;
+    ensureCatMeta();
+    customCategories.secMeta[`${partVal}||${sName}`] = { active: !!active, updatedAt: ts || Date.now() };
   }
 
   function normalizeCustomHierarchy() {
@@ -4062,8 +4086,10 @@
       newPartInput.focus();
       return;
     }
-    if (!BUILTIN_PARTS.includes(name) && !customCategories.parts.includes(name)) {
-      customCategories.parts.push(name);
+    if (!BUILTIN_PARTS.includes(name)) {
+      ensureCatMeta();
+      if (!customCategories.parts.includes(name)) customCategories.parts.push(name);
+      markPartMeta(name, true);
       saveStorage();
     }
     newPartInput.value = "";
@@ -4081,11 +4107,13 @@
       newSecInput.focus();
       return;
     }
+    ensureCatMeta();
     if (!customCategories.sections[partVal]) customCategories.sections[partVal] = [];
     if (!customCategories.sections[partVal].includes(name)) {
       customCategories.sections[partVal].push(name);
-      saveStorage();
     }
+    markSecMeta(partVal, name, true);
+    saveStorage();
     const targetKey = name + " / " + name;
     newSecInput.value = "";
     newSecBox.classList.add("hidden");
@@ -4144,13 +4172,18 @@
       return;
     }
     const now = Date.now();
-    // 1. Update customCategories.parts & sections map
-    customCategories.parts = (customCategories.parts || []).filter(x => x !== oldName);
+    // 1. Update customCategories.parts, sections & sync tombstones
+    ensureCatMeta();
+    customCategories.parts = customCategories.parts.filter(x => x !== oldName);
     if (!customCategories.parts.includes(newName)) customCategories.parts.push(newName);
-    if (customCategories.sections && customCategories.sections[oldName]) {
+    markPartMeta(oldName, false, now);
+    markPartMeta(newName, true, now);
+    if (customCategories.sections[oldName]) {
       const mergedSecs = (customCategories.sections[newName] || []).slice();
       for (const s of customCategories.sections[oldName]) {
         if (!mergedSecs.includes(s)) mergedSecs.push(s);
+        markSecMeta(oldName, s, false, now);
+        markSecMeta(newName, s, true, now);
       }
       customCategories.sections[newName] = mergedSecs;
       delete customCategories.sections[oldName];
@@ -4203,12 +4236,15 @@
       return;
     }
     const now = Date.now();
-    // 1. Update customCategories.sections[partVal]
+    // 1. Update customCategories.sections[partVal] & sync tombstones
+    ensureCatMeta();
     if (!customCategories.sections[partVal]) customCategories.sections[partVal] = [];
     customCategories.sections[partVal] = customCategories.sections[partVal].filter(x => x !== oldSecName);
     if (!customCategories.sections[partVal].includes(newSecName)) {
       customCategories.sections[partVal].push(newSecName);
     }
+    markSecMeta(partVal, oldSecName, false, now);
+    markSecMeta(partVal, newSecName, true, now);
     // 2. Cascade rename across customQuestions under this part + section (keep 2-level: c === s)
     const newChap = newSecName;
     for (const q of customQuestions) {
@@ -4271,17 +4307,19 @@
     const oldSecName = curObj.s;
     const now = Date.now();
 
-    // 1. Remove from customCategories.sections[partVal]
-    if (customCategories.sections && Array.isArray(customCategories.sections[partVal])) {
+    // 1. Remove from customCategories.sections[partVal] & record tombstone for cloud sync
+    ensureCatMeta();
+    if (Array.isArray(customCategories.sections[partVal])) {
       customCategories.sections[partVal] = customCategories.sections[partVal].filter(x => x !== oldSecName);
     }
+    markSecMeta(partVal, oldSecName, false, now);
 
     // 2. Move all customQuestions in this section up to the parent Part (direct under partVal)
     let movedCount = 0;
     const targetChap = partVal;
     const targetSec = "直属大类";
     for (const q of customQuestions) {
-      if (q.p === partVal && q.c === oldChap && q.s === oldSecName) {
+      if (q.p === partVal && q.s === oldSecName && (q.c === oldChap || q.c === CUSTOM_CHAPTER || q.c === oldSecName)) {
         q.c = targetChap;
         q.s = targetSec;
         q.updatedAt = now;
@@ -4308,11 +4346,16 @@
     if (!isUserCustomPart(partVal)) return;
     const now = Date.now();
 
-    // 1. Remove from customCategories
-    customCategories.parts = (customCategories.parts || []).filter(x => x !== partVal);
-    if (customCategories.sections && customCategories.sections[partVal]) {
-      delete customCategories.sections[partVal];
+    // 1. Remove from customCategories & record tombstones for cloud sync
+    ensureCatMeta();
+    customCategories.parts = customCategories.parts.filter(x => x !== partVal);
+    markPartMeta(partVal, false, now);
+    if (Array.isArray(customCategories.sections[partVal])) {
+      for (const sName of customCategories.sections[partVal]) {
+        markSecMeta(partVal, sName, false, now);
+      }
     }
+    delete customCategories.sections[partVal];
 
     // 2. Handle questions under this part
     const affected = customQuestions.filter(q => q.p === partVal);
@@ -4709,20 +4752,72 @@
     const delSet = new Set(deletedCustomIds.concat(Array.isArray(remote.deletedCustomIds) ? remote.deletedCustomIds : []));
     deletedCustomIds = [...delSet];
 
-    // 1.5 Merge customCategories
+    // 1.5 Merge customCategories with timestamped tombstones (latest updatedAt wins; never resurrect deleted categories)
+    ensureCatMeta();
     if (remote.customCategories && typeof remote.customCategories === "object") {
-      const rParts = Array.isArray(remote.customCategories.parts) ? remote.customCategories.parts : [];
-      for (const p of rParts) {
-        if (p && !customCategories.parts.includes(p)) customCategories.parts.push(p);
+      const rc = remote.customCategories;
+      const rPartMeta = (rc.partMeta && typeof rc.partMeta === "object") ? rc.partMeta : {};
+      const rSecMeta = (rc.secMeta && typeof rc.secMeta === "object") ? rc.secMeta : {};
+      const rParts = Array.isArray(rc.parts) ? rc.parts : [];
+      const rSecs = (rc.sections && typeof rc.sections === "object") ? rc.sections : {};
+
+      // Seed local meta for any existing local entries lacking metadata
+      for (const p of customCategories.parts) {
+        if (p && !customCategories.partMeta[p]) customCategories.partMeta[p] = { active: true, updatedAt: 1 };
       }
-      const rSecs = (remote.customCategories.sections && typeof remote.customCategories.sections === "object") ? remote.customCategories.sections : {};
-      for (const p in rSecs) {
-        if (!Array.isArray(rSecs[p])) continue;
-        if (!customCategories.sections[p]) customCategories.sections[p] = [];
-        for (const sName of rSecs[p]) {
-          if (sName && !customCategories.sections[p].includes(sName)) customCategories.sections[p].push(sName);
+      for (const p in customCategories.sections) {
+        if (!Array.isArray(customCategories.sections[p])) continue;
+        for (const sName of customCategories.sections[p]) {
+          const sk = `${p}||${sName}`;
+          if (sName && !customCategories.secMeta[sk]) customCategories.secMeta[sk] = { active: true, updatedAt: 1 };
         }
       }
+
+      // Merge partMeta
+      const allPartNames = new Set([...Object.keys(customCategories.partMeta), ...Object.keys(rPartMeta), ...rParts]);
+      for (const p of allPartNames) {
+        if (!p || BUILTIN_PARTS.includes(p)) continue;
+        const lm = customCategories.partMeta[p];
+        const rm = rPartMeta[p] || (rParts.includes(p) ? { active: true, updatedAt: 1 } : null);
+        if (rm && (!lm || (rm.updatedAt || 0) > (lm.updatedAt || 0))) {
+          customCategories.partMeta[p] = { active: !!rm.active, updatedAt: rm.updatedAt || 1 };
+        }
+      }
+      customCategories.parts = Object.keys(customCategories.partMeta).filter(p => customCategories.partMeta[p].active);
+
+      // Merge secMeta
+      const allSecKeys = new Set([...Object.keys(customCategories.secMeta), ...Object.keys(rSecMeta)]);
+      for (const p in rSecs) {
+        if (!Array.isArray(rSecs[p])) continue;
+        for (const sName of rSecs[p]) {
+          if (sName) allSecKeys.add(`${p}||${sName}`);
+        }
+      }
+      for (const sk of allSecKeys) {
+        const idx = sk.indexOf("||");
+        if (idx === -1) continue;
+        const p = sk.slice(0, idx);
+        const sName = sk.slice(idx + 2);
+        const lm = customCategories.secMeta[sk];
+        const inRemoteList = Array.isArray(rSecs[p]) && rSecs[p].includes(sName);
+        const rm = rSecMeta[sk] || (inRemoteList ? { active: true, updatedAt: 1 } : null);
+        if (rm && (!lm || (rm.updatedAt || 0) > (lm.updatedAt || 0))) {
+          customCategories.secMeta[sk] = { active: !!rm.active, updatedAt: rm.updatedAt || 1 };
+        }
+      }
+      const nextSections = {};
+      for (const sk in customCategories.secMeta) {
+        if (!customCategories.secMeta[sk].active) continue;
+        const idx = sk.indexOf("||");
+        if (idx === -1) continue;
+        const p = sk.slice(0, idx);
+        const sName = sk.slice(idx + 2);
+        // Skip sections whose parent custom part is deleted
+        if (isUserCustomPart(p) && customCategories.partMeta[p] && !customCategories.partMeta[p].active) continue;
+        if (!nextSections[p]) nextSections[p] = [];
+        if (!nextSections[p].includes(sName)) nextSections[p].push(sName);
+      }
+      customCategories.sections = nextSections;
     }
 
     // 2. Merge customQuestions by id (latest updatedAt wins, skip deleted)
@@ -4738,6 +4833,7 @@
       }
     }
     customQuestions = [...cqMap.values()];
+    normalizeCustomHierarchy();
 
     // 2.5 Merge notes (latest updatedAt wins)
     if (remote.notes && typeof remote.notes === "object") {
