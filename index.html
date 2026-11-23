@@ -1557,6 +1557,7 @@
           <div class="select-with-add">
             <select class="select-box" id="customPartSelect"></select>
             <button type="button" class="btn-add-mini hidden" id="btnRenamePart" title="修改当前自定义大类名称">改名</button>
+            <button type="button" class="btn-add-mini hidden" id="btnDeletePart" style="border-color:var(--err-border);background:var(--err-bg);color:var(--err);" title="删除当前自定义大类">删除</button>
             <button type="button" class="btn-add-mini" id="btnAddNewPart">+ 新建</button>
           </div>
           <div class="inline-add-box hidden" id="newPartBox">
@@ -1569,9 +1570,15 @@
             <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenamePart">保存</button>
             <button type="button" class="btn btn-sm" id="btnCancelRenamePart">取消</button>
           </div>
+          <div class="inline-add-box hidden" id="deletePartBox" style="background:var(--err-bg);border:1px solid var(--err-border);padding:6px 8px;border-radius:8px;font-size:12.5px;color:var(--err);flex-wrap:wrap;">
+            <span id="deletePartMsg" style="flex:1 1 160px;min-width:0;"></span>
+            <button type="button" class="btn btn-sm btn-primary hidden" id="btnMoveAndDeletePart">题归第一篇并删大类</button>
+            <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDeletePart">确认删除</button>
+            <button type="button" class="btn btn-sm" id="btnCancelDeletePart">取消</button>
+          </div>
         </div>
         <div class="form-field" style="margin-bottom:0;">
-          <label for="customSectionSelect">所属小类（章 / 小节）</label>
+          <label for="customSectionSelect">所属小类（二级分类）</label>
           <div class="select-with-add">
             <select class="select-box" id="customSectionSelect"></select>
             <button type="button" class="btn-add-mini hidden" id="btnRenameSec" title="修改当前自定义小类名称">改名</button>
@@ -2134,6 +2141,12 @@
   const deleteSecMsg = document.getElementById("deleteSecMsg");
   const btnConfirmDeleteSec = document.getElementById("btnConfirmDeleteSec");
   const btnCancelDeleteSec = document.getElementById("btnCancelDeleteSec");
+  const btnDeletePart = document.getElementById("btnDeletePart");
+  const deletePartBox = document.getElementById("deletePartBox");
+  const deletePartMsg = document.getElementById("deletePartMsg");
+  const btnMoveAndDeletePart = document.getElementById("btnMoveAndDeletePart");
+  const btnConfirmDeletePart = document.getElementById("btnConfirmDeletePart");
+  const btnCancelDeletePart = document.getElementById("btnCancelDeletePart");
   const btnTypeFalse = document.getElementById("btnTypeFalse");
   const btnTypeTrue = document.getElementById("btnTypeTrue");
   const customQuestion = document.getElementById("customQuestion");
@@ -2316,6 +2329,7 @@
             }
           }
           settings = Object.assign({ autoNext: false }, parsed.settings || {});
+          normalizeCustomHierarchy();
         }
       }
       const rawCfg = localStorage.getItem(SYNC_CFG_KEY);
@@ -2344,9 +2358,38 @@
     } catch (e) {}
   }
 
+  function normalizeCustomHierarchy() {
+    for (const q of customQuestions) {
+      if (!q || typeof q !== "object") continue;
+      if (q.c === CUSTOM_CHAPTER) {
+        q.c = q.s || q.p;
+      }
+      if (isUserCustomPart(q.p) && q.s && q.s !== "直属大类" && q.c !== q.s) {
+        q.c = q.s;
+      }
+    }
+  }
+
+  function buildStatePayload(extra) {
+    return Object.assign({}, extra || {}, {
+      records,
+      customQuestions,
+      deletedCustomIds,
+      customCategories,
+      customConfusableQuestions,
+      deletedCustomCfIds,
+      customCfCategories,
+      notes,
+      starredMap,
+      questionOverrides,
+      progressState,
+      settings
+    });
+  }
+
   function saveStorage(skipAutoSync) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, customQuestions, deletedCustomIds, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, starredMap, questionOverrides, progressState, settings }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(buildStatePayload()));
     } catch (e) {
       // Ignore storage quota / sandbox restrictions
     }
@@ -2415,6 +2458,43 @@
     }
     if (quizStarredCnt) quizStarredCnt.textContent = String(qCnt);
     if (cfStarredCnt) cfStarredCnt.textContent = String(cfCnt);
+  }
+
+  function renderStarBtnHtml(id, btnId, extraClass, compact) {
+    const starred = isStarred(id);
+    const idAttr = btnId ? `id="${btnId}"` : "";
+    const cls = `star-btn ${starred ? "is-starred" : ""}${extraClass ? " " + extraClass : ""}`;
+    const styleAttr = compact ? ' style="width:28px;height:28px;font-size:14px;"' : "";
+    const dataAttr = btnId ? "" : ` data-id="${id}"`;
+    const title = starred ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中";
+    return `<button type="button" class="${cls}" ${idAttr}${dataAttr}${styleAttr} title="${title}">${starred ? "★" : "☆"}</button>`;
+  }
+
+  function formatSectionLabel(partVal, c, s) {
+    if (s === "直属大类") return "直属大类（不细分小类）";
+    if (!c || c === s || c === partVal || c === CUSTOM_CHAPTER || isUserCustomPart(partVal)) return s;
+    return c + " / " + s;
+  }
+
+  function renderQuestionTagsHtml(q, includeNum, includeCustomBadge) {
+    const isTwoLevel = isUserCustomPart(q.p) || q.s === "直属大类" || q.c === q.s || q.c === q.p || q.c === CUSTOM_CHAPTER;
+    const primaryTag = isTwoLevel ? q.p : q.c;
+    let secondaryText = "";
+    if (q.s === "直属大类") {
+      secondaryText = includeNum ? `第 ${q.n} 题` : "直属大类";
+    } else {
+      secondaryText = includeNum ? `${q.s} · 第 ${q.n} 题` : q.s;
+    }
+    const customBadge = (includeCustomBadge && (q.isCustom || String(q.id).startsWith("c_")))
+      ? '<span class="custom-badge">自定义</span>' : "";
+    return `<span class="tag">${escapeHtml(primaryTag)}</span><span class="tag tag-soft">${escapeHtml(secondaryText)}</span>${customBadge}`;
+  }
+
+  function bindEnterKey(inputEl, fn) {
+    if (!inputEl) return;
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); fn(); }
+    });
   }
 
   function getNoteText(id) {
@@ -2698,10 +2778,11 @@
 
   function populateChapterSelect() {
     const allQ = getAllQuestions();
+    const isCustomPartSelected = filterPart !== "ALL" && isUserCustomPart(filterPart);
     selectChapter.innerHTML = "";
     const optAll = document.createElement("option");
     optAll.value = "ALL";
-    optAll.textContent = "全部章节";
+    optAll.textContent = isCustomPartSelected ? "全部小类" : "全部章节";
     selectChapter.appendChild(optAll);
 
     const chapOrder = [];
@@ -2709,15 +2790,16 @@
     for (const q of allQ) {
       if (filterPart !== "ALL" && q.p !== filterPart) continue;
       const ck = q.p + "||" + q.c;
-      if (!chapCounts.has(ck)) chapOrder.push({ ck, p: q.p, c: q.c });
+      if (!chapCounts.has(ck)) {
+        const lbl = (q.s === "直属大类" && q.c === q.p) ? "直属大类" : q.c;
+        chapOrder.push({ ck, label: lbl });
+      }
       chapCounts.set(ck, (chapCounts.get(ck) || 0) + 1);
     }
     for (const item of chapOrder) {
       const opt = document.createElement("option");
       opt.value = item.ck;
-      opt.textContent = filterPart === "ALL"
-        ? `${item.c}（${chapCounts.get(item.ck)}题）`
-        : `${item.c}（${chapCounts.get(item.ck)}题）`;
+      opt.textContent = `${item.label}（${chapCounts.get(item.ck)}题）`;
       selectChapter.appendChild(opt);
     }
     if ([...selectChapter.options].some(o => o.value === filterChapter)) {
@@ -2730,28 +2812,46 @@
 
   function populateSectionSelect() {
     const allQ = getAllQuestions();
+    // Custom parts strictly use 2 levels (Part -> Section/Chapter), so hide 3rd dropdown
+    if (filterPart !== "ALL" && isUserCustomPart(filterPart)) {
+      filterSection = "ALL";
+      selectSection.classList.add("hidden");
+      return;
+    }
+
+    const secOrder = [];
+    const secCounts = new Map();
+    let allTwoLevel = true;
+    for (const q of allQ) {
+      if (filterPart !== "ALL" && q.p !== filterPart) continue;
+      const ck = q.p + "||" + q.c;
+      if (filterChapter !== "ALL" && ck !== filterChapter) continue;
+      const k = q.c + " / " + q.s;
+      if (q.c !== q.s && q.s !== "直属大类") allTwoLevel = false;
+      if (!secCounts.has(k)) secOrder.push({ k, c: q.c, s: q.s, p: q.p });
+      secCounts.set(k, (secCounts.get(k) || 0) + 1);
+    }
+
+    if (filterChapter !== "ALL" && allTwoLevel && secOrder.length <= 1) {
+      filterSection = "ALL";
+      selectSection.classList.add("hidden");
+      return;
+    }
+    selectSection.classList.remove("hidden");
+
     selectSection.innerHTML = "";
     const optAll = document.createElement("option");
     optAll.value = "ALL";
     optAll.textContent = "全部小节";
     selectSection.appendChild(optAll);
 
-    const secOrder = [];
-    const secCounts = new Map();
-    for (const q of allQ) {
-      if (filterPart !== "ALL" && q.p !== filterPart) continue;
-      const ck = q.p + "||" + q.c;
-      if (filterChapter !== "ALL" && ck !== filterChapter) continue;
-      const k = q.c + " / " + q.s;
-      if (!secCounts.has(k)) secOrder.push({ k, s: q.s });
-      secCounts.set(k, (secCounts.get(k) || 0) + 1);
-    }
     for (const item of secOrder) {
       const opt = document.createElement("option");
       opt.value = item.k;
-      opt.textContent = filterChapter === "ALL"
-        ? `${item.k}（${secCounts.get(item.k)}题）`
-        : `${item.s}（${secCounts.get(item.k)}题）`;
+      const label = filterChapter === "ALL"
+        ? formatSectionLabel(item.p, item.c, item.s)
+        : (item.s === "直属大类" ? "直属大类" : item.s);
+      opt.textContent = `${label}（${secCounts.get(item.k)}题）`;
       selectSection.appendChild(opt);
     }
     if ([...selectSection.options].some(o => o.value === filterSection)) {
@@ -2938,14 +3038,10 @@
     quizCardArea.innerHTML = `
       <article class="quiz-card">
         <div class="card-meta">
-          <div class="breadcrumb">
-            <span class="tag">${escapeHtml(q.c)}</span>
-            <span class="tag tag-soft">${escapeHtml(q.s)} · 第 ${q.n} 题</span>
-            ${(q.isCustom || String(q.id).startsWith("c_")) ? '<span class="custom-badge">自定义</span>' : ""}
-          </div>
+          <div class="breadcrumb">${renderQuestionTagsHtml(q, true, true)}</div>
           <div class="card-right-meta">
             <div class="stat-badges">${answered ? badgeHtml : ""}</div>
-            <button type="button" class="star-btn ${isStarred(q.id) ? "is-starred" : ""}" id="btnStarQuiz" title="${isStarred(q.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(q.id) ? "★" : "☆"}</button>
+            ${renderStarBtnHtml(q.id, "btnStarQuiz", "", false)}
           </div>
         </div>
         <p class="question-text">${escapeHtml(q.q)}</p>
@@ -3190,10 +3286,7 @@
       return `
         <div class="wb-item ${r.mastered ? "is-mastered" : ""}" data-id="${q.id}">
           <div class="wb-item-head">
-            <div class="breadcrumb">
-              <span class="tag">${escapeHtml(q.c)}</span>
-              <span class="tag tag-soft">${escapeHtml(q.s)} · 第 ${q.n} 题</span>
-            </div>
+            <div class="breadcrumb">${renderQuestionTagsHtml(q, true, false)}</div>
             <div class="stat-badges">
               <span class="err-badge">错 ${r.wrong} 次</span>
               <span class="neutral-badge">共做 ${r.attempts} 次</span>
@@ -3263,10 +3356,10 @@
     const userSecs = (customCategories.sections && customCategories.sections[partVal]) || [];
     for (const sName of userSecs) {
       if (!sName) continue;
-      const key = CUSTOM_CHAPTER + " / " + sName;
+      const key = sName + " / " + sName;
       if (!seen.has(key)) {
         seen.add(key);
-        list.push({ key, c: CUSTOM_CHAPTER, s: sName });
+        list.push({ key, c: sName, s: sName });
       }
     }
     for (const q of customQuestions) {
@@ -3304,7 +3397,7 @@
     for (const sec of secs) {
       const opt = document.createElement("option");
       opt.value = sec.key;
-      opt.textContent = sec.key;
+      opt.textContent = formatSectionLabel(partVal, sec.c, sec.s);
       customSectionSelect.appendChild(opt);
     }
     if (selectedSecKey && secs.some(x => x.key === selectedSecKey)) {
@@ -3326,16 +3419,39 @@
     return !builtinSecs.some(x => x.key === secKey);
   }
 
+  function hideInlineCategoryBoxes() {
+    for (const el of [newPartBox, renamePartBox, deletePartBox, newSecBox, renameSecBox, deleteSecBox]) {
+      if (el) el.classList.add("hidden");
+    }
+  }
+
+  function refreshCategoryViews(targetPart, targetSecKey, updateParts) {
+    hideInlineCategoryBoxes();
+    saveStorage();
+    rebuildIndex();
+    populatePartSelects();
+    populateChapterSelect();
+    populateSectionSelect();
+    if (updateParts) {
+      populateCustomFormDropdowns(targetPart, targetSecKey);
+    } else {
+      populateCustomFormSections(targetPart, targetSecKey);
+    }
+    updateMultiFilterBarUI();
+    buildQueue();
+    renderCustomManager();
+  }
+
   function updateRenameCustomBtnVisibility() {
     const pVal = customPartSelect.value;
     const sKey = customSectionSelect.value;
+    const canEditPart = isUserCustomPart(pVal);
     const canEditSec = isUserCustomSection(pVal, sKey);
-    btnRenamePart.classList.toggle("hidden", !isUserCustomPart(pVal));
+    btnRenamePart.classList.toggle("hidden", !canEditPart);
+    btnDeletePart.classList.toggle("hidden", !canEditPart);
     btnRenameSec.classList.toggle("hidden", !canEditSec);
     btnDeleteSec.classList.toggle("hidden", !canEditSec);
-    renamePartBox.classList.add("hidden");
-    renameSecBox.classList.add("hidden");
-    deleteSecBox.classList.add("hidden");
+    hideInlineCategoryBoxes();
   }
 
   function resetCustomForm(keepCategory) {
@@ -3395,11 +3511,11 @@
 
     // Populate filter Section dropdown
     const secCounts = new Map();
-    const secKeys = [];
+    const secItems = [];
     for (const q of customQuestions) {
       if (customFilterPartVal !== "ALL" && q.p !== customFilterPartVal) continue;
       const k = q.c + " / " + q.s;
-      if (!secCounts.has(k)) secKeys.push(k);
+      if (!secCounts.has(k)) secItems.push({ k, label: formatSectionLabel(q.p, q.c, q.s) });
       secCounts.set(k, (secCounts.get(k) || 0) + 1);
     }
     customFilterCat.innerHTML = "";
@@ -3407,10 +3523,10 @@
     optSAll.value = "ALL";
     optSAll.textContent = "全部小类";
     customFilterCat.appendChild(optSAll);
-    for (const k of secKeys) {
+    for (const item of secItems) {
       const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = `${k}（${secCounts.get(k)} 题）`;
+      opt.value = item.k;
+      opt.textContent = `${item.label}（${secCounts.get(item.k)} 题）`;
       customFilterCat.appendChild(opt);
     }
     if ([...customFilterCat.options].some(o => o.value === customFilterCatVal)) {
@@ -3452,8 +3568,7 @@
         <div class="wb-item" data-id="${q.id}">
           <div class="wb-item-head">
             <div class="breadcrumb">
-              <span class="tag">${escapeHtml(q.c)}</span>
-              <span class="tag tag-soft">${escapeHtml(q.s)}</span>
+              ${renderQuestionTagsHtml(q, false, false)}
               <span class="${q.ok ? "ok-badge" : "err-badge"}">${q.ok ? "正确表述" : "设坑题"}</span>
             </div>
             <div class="stat-badges">${statHtml}</div>
@@ -3477,8 +3592,8 @@
     const secKey = customSectionSelect.value;
     const secs = getAvailableSectionsForPart(partVal);
     const secObj = secs.find(x => x.key === secKey) || secs[0];
-    const chapVal = secObj ? secObj.c : CUSTOM_CHAPTER;
-    const secVal = secObj ? secObj.s : "默认小节";
+    const secVal = secObj ? secObj.s : "直属大类";
+    const chapVal = secObj ? secObj.c : partVal;
 
     const qText = customQuestion.value.trim();
     const wrongStr = customWrongTerms.value.trim();
@@ -3821,7 +3936,7 @@
           </div>
           <div class="card-right-meta">
             <div class="stat-badges">${answered ? badgeHtml : ""}</div>
-            <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""}" id="btnStarCf" title="${isStarred(item.id) ? "已彻底掌握（点此取消）" : "点亮彻底掌握，不再出现在题库中"}">${isStarred(item.id) ? "★" : "☆"}</button>
+            ${renderStarBtnHtml(item.id, "btnStarCf", "", false)}
           </div>
         </div>
         <p class="question-text">${promptHtml}</p>
@@ -3971,7 +4086,7 @@
       customCategories.sections[partVal].push(name);
       saveStorage();
     }
-    const targetKey = CUSTOM_CHAPTER + " / " + name;
+    const targetKey = name + " / " + name;
     newSecInput.value = "";
     newSecBox.classList.add("hidden");
     populateCustomFormSections(partVal, targetKey);
@@ -4044,27 +4159,28 @@
     for (const q of customQuestions) {
       if (q.p === oldName) {
         q.p = newName;
+        if (q.c === oldName) q.c = newName;
         q.updatedAt = now;
       }
     }
     // 3. Update active filters & multiSelectedKeys
     if (filterPart === oldName) filterPart = newName;
-    if (filterChapter.startsWith(oldName + "||")) filterChapter = newName + filterChapter.slice(oldName.length);
+    if (filterChapter.startsWith(oldName + "||")) {
+      const rest = filterChapter.slice(oldName.length + 2);
+      filterChapter = newName + "||" + (rest === oldName ? newName : rest);
+    }
     if (customFilterPartVal === oldName) customFilterPartVal = newName;
     if (wbPart === oldName) wbPart = newName;
-    multiSelectedKeys = multiSelectedKeys.map(k => k.startsWith(oldName + "||") ? (newName + k.slice(oldName.length)) : k);
+    multiSelectedKeys = multiSelectedKeys.map(k => {
+      if (!k.startsWith(oldName + "||")) return k;
+      const parts = k.split("||");
+      return `${newName}||${parts[1] === oldName ? newName : parts[1]}||${parts[2]}`;
+    });
 
-    const curSecKey = customSectionSelect.value;
-    renamePartBox.classList.add("hidden");
-    saveStorage();
-    rebuildIndex();
-    populatePartSelects();
-    populateChapterSelect();
-    populateSectionSelect();
-    populateCustomFormDropdowns(newName, curSecKey);
-    updateMultiFilterBarUI();
-    buildQueue();
-    renderCustomManager();
+    const curSecKey = customSectionSelect.value === (oldName + " / 直属大类")
+      ? (newName + " / 直属大类")
+      : customSectionSelect.value;
+    refreshCategoryViews(newName, curSecKey, true);
     showToast(`大类已改名为「${newName}」`);
   }
 
@@ -4093,37 +4209,32 @@
     if (!customCategories.sections[partVal].includes(newSecName)) {
       customCategories.sections[partVal].push(newSecName);
     }
-    // 2. Cascade rename across customQuestions under this part + section
+    // 2. Cascade rename across customQuestions under this part + section (keep 2-level: c === s)
+    const newChap = newSecName;
     for (const q of customQuestions) {
       if (q.p === partVal && q.c === oldChap && q.s === oldSecName) {
+        q.c = newChap;
         q.s = newSecName;
         q.updatedAt = now;
       }
     }
-    const newKey = oldChap + " / " + newSecName;
+    const newKey = newChap + " / " + newSecName;
+    if (filterChapter === `${partVal}||${oldChap}`) filterChapter = `${partVal}||${newChap}`;
     if (filterSection === oldKey) filterSection = newKey;
     if (customFilterCatVal === oldKey) customFilterCatVal = newKey;
     const oldSk = `${partVal}||${oldChap}||${oldSecName}`;
-    const newSk = `${partVal}||${oldChap}||${newSecName}`;
+    const newSk = `${partVal}||${newChap}||${newSecName}`;
     multiSelectedKeys = multiSelectedKeys.map(k => k === oldSk ? newSk : k);
 
-    renameSecBox.classList.add("hidden");
-    saveStorage();
-    rebuildIndex();
-    populatePartSelects();
-    populateChapterSelect();
-    populateSectionSelect();
-    populateCustomFormSections(partVal, newKey);
-    updateMultiFilterBarUI();
-    buildQueue();
-    renderCustomManager();
+    refreshCategoryViews(partVal, newKey, false);
     showToast(`小类已改名为「${newSecName}」`);
   }
 
   btnRenamePart.addEventListener("click", () => {
-    newPartBox.classList.add("hidden");
-    renamePartBox.classList.toggle("hidden");
-    if (!renamePartBox.classList.contains("hidden")) {
+    const show = renamePartBox.classList.contains("hidden");
+    hideInlineCategoryBoxes();
+    if (show) {
+      renamePartBox.classList.remove("hidden");
       renamePartInput.value = customPartSelect.value || "";
       renamePartInput.focus();
       renamePartInput.select();
@@ -4131,14 +4242,13 @@
   });
   btnCancelRenamePart.addEventListener("click", () => renamePartBox.classList.add("hidden"));
   btnConfirmRenamePart.addEventListener("click", confirmRenamePart);
-  renamePartInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); confirmRenamePart(); }
-  });
+  bindEnterKey(renamePartInput, confirmRenamePart);
 
   btnRenameSec.addEventListener("click", () => {
-    newSecBox.classList.add("hidden");
-    renameSecBox.classList.toggle("hidden");
-    if (!renameSecBox.classList.contains("hidden")) {
+    const show = renameSecBox.classList.contains("hidden");
+    hideInlineCategoryBoxes();
+    if (show) {
+      renameSecBox.classList.remove("hidden");
       const secs = getAvailableSectionsForPart(customPartSelect.value);
       const curObj = secs.find(x => x.key === customSectionSelect.value);
       renameSecInput.value = curObj ? curObj.s : "";
@@ -4148,9 +4258,7 @@
   });
   btnCancelRenameSec.addEventListener("click", () => renameSecBox.classList.add("hidden"));
   btnConfirmRenameSec.addEventListener("click", confirmRenameSec);
-  renameSecInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); confirmRenameSec(); }
-  });
+  bindEnterKey(renameSecInput, confirmRenameSec);
 
   function deleteCurrentCustomSection() {
     const partVal = customPartSelect.value;
@@ -4189,25 +4297,83 @@
     const newSk = `${partVal}||${targetChap}||${targetSec}`;
     multiSelectedKeys = [...new Set(multiSelectedKeys.map(k => k === oldSk ? newSk : k))];
 
-    renameSecBox.classList.add("hidden");
-    deleteSecBox.classList.add("hidden");
-    saveStorage();
-    rebuildIndex();
-    populatePartSelects();
-    populateChapterSelect();
-    populateSectionSelect();
-    populateCustomFormSections(partVal, newKey);
-    updateMultiFilterBarUI();
-    buildQueue();
-    renderCustomManager();
+    refreshCategoryViews(partVal, newKey, false);
     showToast(movedCount > 0
       ? `已去掉小类「${oldSecName}」，旗下 ${movedCount} 题已自动归入「${partVal}」`
       : `已删除小类「${oldSecName}」`);
   }
 
+  function deleteCurrentCustomPart(deleteQuestions) {
+    const partVal = customPartSelect.value;
+    if (!isUserCustomPart(partVal)) return;
+    const now = Date.now();
+
+    // 1. Remove from customCategories
+    customCategories.parts = (customCategories.parts || []).filter(x => x !== partVal);
+    if (customCategories.sections && customCategories.sections[partVal]) {
+      delete customCategories.sections[partVal];
+    }
+
+    // 2. Handle questions under this part
+    const affected = customQuestions.filter(q => q.p === partVal);
+    const fallbackPart = BUILTIN_PARTS[0];
+    if (deleteQuestions) {
+      for (const q of affected) {
+        if (!deletedCustomIds.includes(q.id)) deletedCustomIds.push(q.id);
+      }
+      customQuestions = customQuestions.filter(q => q.p !== partVal);
+    } else {
+      for (const q of affected) {
+        q.p = fallbackPart;
+        q.c = fallbackPart;
+        q.s = "直属大类";
+        q.updatedAt = now;
+      }
+    }
+
+    // 3. Clean up active filters & multiSelectedKeys
+    if (filterPart === partVal) { filterPart = "ALL"; filterChapter = "ALL"; filterSection = "ALL"; }
+    if (filterChapter.startsWith(partVal + "||")) { filterChapter = "ALL"; filterSection = "ALL"; }
+    if (customFilterPartVal === partVal) { customFilterPartVal = "ALL"; customFilterCatVal = "ALL"; }
+    if (wbPart === partVal) wbPart = "ALL";
+    multiSelectedKeys = multiSelectedKeys.filter(k => !k.startsWith(partVal + "||"));
+
+    refreshCategoryViews(fallbackPart, null, true);
+    if (affected.length === 0) {
+      showToast(`已删除大类「${partVal}」`);
+    } else if (deleteQuestions) {
+      showToast(`已删除大类「${partVal}」及旗下 ${affected.length} 道题`);
+    } else {
+      showToast(`已删除大类「${partVal}」，旗下 ${affected.length} 题已移入「${fallbackPart}」`);
+    }
+  }
+
+  btnDeletePart.addEventListener("click", () => {
+    const wasHidden = deletePartBox.classList.contains("hidden");
+    hideInlineCategoryBoxes();
+    if (!wasHidden) return;
+    const partVal = customPartSelect.value;
+    if (!isUserCustomPart(partVal)) return;
+    const cnt = customQuestions.filter(q => q.p === partVal).length;
+    if (cnt > 0) {
+      deletePartMsg.textContent = `大类「${partVal}」下有 ${cnt} 道自定义题：`;
+      btnMoveAndDeletePart.classList.remove("hidden");
+      btnConfirmDeletePart.textContent = "连同题目删除";
+    } else {
+      deletePartMsg.textContent = `确认删除空大类「${partVal}」？`;
+      btnMoveAndDeletePart.classList.add("hidden");
+      btnConfirmDeletePart.textContent = "确认删除";
+    }
+    deletePartBox.classList.remove("hidden");
+  });
+  btnCancelDeletePart.addEventListener("click", () => deletePartBox.classList.add("hidden"));
+  btnMoveAndDeletePart.addEventListener("click", () => deleteCurrentCustomPart(false));
+  btnConfirmDeletePart.addEventListener("click", () => deleteCurrentCustomPart(true));
+
   btnDeleteSec.addEventListener("click", () => {
-    newSecBox.classList.add("hidden");
-    renameSecBox.classList.add("hidden");
+    const wasHidden = deleteSecBox.classList.contains("hidden");
+    hideInlineCategoryBoxes();
+    if (!wasHidden) return;
     const partVal = customPartSelect.value;
     const oldKey = customSectionSelect.value;
     const secs = getAvailableSectionsForPart(partVal);
@@ -4217,7 +4383,7 @@
     deleteSecMsg.textContent = cnt > 0
       ? `去掉小类「${curObj.s}」后，旗下 ${cnt} 道题将自动归入「${partVal}」：`
       : `确认删除空小类「${curObj.s}」？`;
-    deleteSecBox.classList.toggle("hidden");
+    deleteSecBox.classList.remove("hidden");
   });
   btnCancelDeleteSec.addEventListener("click", () => deleteSecBox.classList.add("hidden"));
   btnConfirmDeleteSec.addEventListener("click", deleteCurrentCustomSection);
@@ -4750,22 +4916,8 @@
           populateCfCats();
         }
       }
-      const payloadStr = JSON.stringify({
-        version: 3,
-        updatedAt: Date.now(),
-        records,
-        customQuestions,
-        deletedCustomIds,
-        customCategories,
-        customConfusableQuestions,
-        deletedCustomCfIds,
-        customCfCategories,
-        notes,
-        starredMap,
-        questionOverrides,
-        progressState,
-        settings
-      });
+      normalizeCustomHierarchy();
+      const payloadStr = JSON.stringify(buildStatePayload({ version: 3, updatedAt: Date.now() }));
       const returnedId = await cloudPushGist(provider, token, gistId, payloadStr);
       if (returnedId && returnedId !== gistId) {
         syncCfg.gistId = String(returnedId);
@@ -5104,6 +5256,24 @@
       const pSome = pCheckedCnt > 0 && pCheckedCnt < pSecKeys.length;
 
       const chapsHtml = pNode.chaps.map((cNode, ci) => {
+        // Strict 2-level rendering for custom parts or direct 2-level custom sections
+        const isTwoLevelLeaf = cNode.secs.length === 1 && (
+          isUserCustomPart(pNode.p) || cNode.secs[0].s === cNode.c || cNode.secs[0].s === "直属大类"
+        );
+        if (isTwoLevelLeaf) {
+          const sNode = cNode.secs[0];
+          const checked = draftMultiSet.has(sNode.sk);
+          const sid = `ms_${pi}_${ci}_0`;
+          const lbl = sNode.s === "直属大类" ? "直属大类" : sNode.s;
+          return `
+            <div class="tree-row is-chap">
+              <input type="checkbox" id="${sid}" class="js-tree-sec" data-sk="${escapeHtml(sNode.sk)}" ${checked ? "checked" : ""}>
+              <label for="${sid}">${escapeHtml(lbl)}</label>
+              <span class="tree-cnt">${sNode.count}题</span>
+            </div>
+          `;
+        }
+
         const cSecKeys = cNode.secs.map(s => s.sk);
         const cCheckedCnt = cSecKeys.filter(k => draftMultiSet.has(k)).length;
         const cAll = cCheckedCnt === cSecKeys.length && cSecKeys.length > 0;
@@ -5641,7 +5811,7 @@
           <div class="search-item-foot">
             <span>${escapeHtml(item.p)}</span>
             <div style="display:flex;gap:6px;align-items:center;">
-              <button type="button" class="star-btn ${isStarred(item.id) ? "is-starred" : ""} js-search-star" style="width:28px;height:28px;font-size:14px;" data-id="${item.id}" title="${isStarred(item.id) ? "取消彻底掌握" : "点亮彻底掌握"}">${isStarred(item.id) ? "★" : "☆"}</button>
+              ${renderStarBtnHtml(item.id, "", "js-search-star", true)}
               <button type="button" class="btn btn-sm js-search-edit" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">编辑</button>
               <button type="button" class="btn btn-sm btn-primary js-search-jump" data-id="${item.id}" data-cf="${item.isCf ? "1" : "0"}">去刷这题</button>
             </div>
@@ -5747,7 +5917,7 @@
   });
 
   btnExport.addEventListener("click", () => {
-    const payload = JSON.stringify({ version: 7, exportedAt: new Date().toISOString(), records, customQuestions, customCategories, customConfusableQuestions, deletedCustomCfIds, customCfCategories, notes, starredMap, questionOverrides, progressState, settings }, null, 2);
+    const payload = JSON.stringify(buildStatePayload({ version: 7, exportedAt: new Date().toISOString() }), null, 2);
     const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -5791,6 +5961,7 @@
           progressState = Object.assign(progressState, parsed.progressState);
         }
         if (parsed.settings) settings = Object.assign(settings, parsed.settings);
+        normalizeCustomHierarchy();
         toggleAutoNext.checked = !!settings.autoNext;
         saveStorage();
         rebuildIndex();
