@@ -1810,8 +1810,19 @@
     </div>
 
     <div class="form-field" id="addCfOptsWrap">
-      <label for="addCfOptsInput">可选按钮 <span class="form-hint">（用分号；隔开，2~4个）</span></label>
-      <input type="text" class="text-input" id="addCfOptsInput" placeholder="例如：政治；制度 或 首要任务；根本任务；中心任务">
+      <label for="addCfOptsInput">可选按钮 <span class="form-hint">（用分号；隔开，支持用 / 合并近义选项如「分批/分类」）</span></label>
+      <input type="text" class="text-input" id="addCfOptsInput" placeholder="例如：分批/分类；分级 或 政治；制度">
+      <label for="addCfCorrectOptSelect" style="margin-top:6px;">对应正确选项 <span class="form-hint">（留「自动匹配」即可自动识别相同词或 / 合并词）</span></label>
+      <select class="select-box" id="addCfCorrectOptSelect"></select>
+    </div>
+
+    <div class="form-field hidden" id="addCfQuickBlankWrap" style="background:var(--surface-soft);border:1px solid var(--border);border-radius:10px;padding:10px;">
+      <label for="addCfSourceFull" style="margin-bottom:2px;">原句一键自定义挖空 <span class="form-hint">（选中文字或输入要挖空的词，点「设为挖空」自动拆分）</span></label>
+      <textarea class="text-area" id="addCfSourceFull" style="min-height:56px;font-size:13.5px;background:var(--surface);"></textarea>
+      <div class="inline-add-box" style="margin-top:4px;">
+        <input type="text" class="text-input" id="addCfQuickTerm" placeholder="输入要挖空的关键词（或直接在上框选中文字）">
+        <button type="button" class="btn btn-sm btn-primary" id="btnApplyQuickBlank">设为挖空</button>
+      </div>
     </div>
 
     <div class="form-field">
@@ -1819,7 +1830,7 @@
       <input type="text" class="text-input" id="addCfPre" placeholder="例如：新时代党的建设总要求，以党的">
     </div>
     <div class="form-field">
-      <label for="addCfAns">空缺正确答案 <span class="form-hint">（选词题需与上方选项之一完全一致）</span></label>
+      <label for="addCfAns">空缺正确答案 <span class="form-hint">（答题后填入原句的词，可与选项不同，如选项填「分批/分类」此处填「分类」）</span></label>
       <input type="text" class="text-input" id="addCfAns" placeholder="例如：政治">
     </div>
     <div class="form-field">
@@ -1919,8 +1930,10 @@
         <select class="select-box" id="editCfCatSelect"></select>
       </div>
       <div class="form-field hidden" id="editCfOptsWrap">
-        <label for="editCfOpts">可选按钮 <span class="form-hint">（用分号；隔开）</span></label>
+        <label for="editCfOpts">可选按钮 <span class="form-hint">（用分号；隔开，支持用 / 合并近义选项如「分批/分类」）</span></label>
         <input type="text" class="text-input" id="editCfOpts">
+        <label for="editCfCorrectOptSelect" style="margin-top:6px;">对应正确选项 <span class="form-hint">（留「自动匹配」即可自动识别相同词或 / 合并词）</span></label>
+        <select class="select-box" id="editCfCorrectOptSelect"></select>
       </div>
       <div class="form-field">
         <label for="editCfPre">空缺前半句</label>
@@ -2097,12 +2110,47 @@
         ans,
         post,
         opts: Array.isArray(ov.opts) && ov.opts.length ? ov.opts : item.opts,
+        correctOpt: ov.correctOpt !== undefined ? ov.correctOpt : (item.correctOpt || ""),
         full: ov.full !== undefined ? ov.full : (pre + ans + post),
         note: ov.note !== undefined ? ov.note : item.note,
         isEdited: true
       });
     }
     return item;
+  }
+
+  function isCorrectCfOption(optVal, item) {
+    if (!item || !optVal) return false;
+    if (item.correctOpt) return optVal === item.correctOpt;
+    if (optVal === item.ans) return true;
+    const parts = String(optVal).split(/[/／、|｜]/).map(s => s.trim()).filter(Boolean);
+    return parts.includes(String(item.ans || "").trim());
+  }
+
+  function resolveCorrectCfOpt(opts, ans, explicitOpt) {
+    if (explicitOpt && opts.includes(explicitOpt)) return explicitOpt;
+    const exact = opts.find(o => o === ans);
+    if (exact) return exact;
+    const fuzzy = opts.find(o => o.split(/[/／、|｜]/).map(s => s.trim()).includes(ans));
+    return fuzzy || "";
+  }
+
+  function populateCorrectOptSelect(selectEl, optsRaw, selectedVal) {
+    if (!selectEl) return;
+    const opts = String(optsRaw || "").split(/[;；]/).map(s => s.trim()).filter(Boolean);
+    const keep = selectedVal !== undefined ? selectedVal : selectEl.value;
+    selectEl.innerHTML = "";
+    const optAuto = document.createElement("option");
+    optAuto.value = "";
+    optAuto.textContent = "自动匹配（与空缺词一致或含「/」合并词）";
+    selectEl.appendChild(optAuto);
+    for (const o of opts) {
+      const opt = document.createElement("option");
+      opt.value = o;
+      opt.textContent = o;
+      selectEl.appendChild(opt);
+    }
+    selectEl.value = (keep && opts.includes(keep)) ? keep : "";
   }
 
   function getAllQuestions() {
@@ -2340,6 +2388,11 @@
   const addCfTypeBlank = document.getElementById("addCfTypeBlank");
   const addCfOptsWrap = document.getElementById("addCfOptsWrap");
   const addCfOptsInput = document.getElementById("addCfOptsInput");
+  const addCfCorrectOptSelect = document.getElementById("addCfCorrectOptSelect");
+  const addCfQuickBlankWrap = document.getElementById("addCfQuickBlankWrap");
+  const addCfSourceFull = document.getElementById("addCfSourceFull");
+  const addCfQuickTerm = document.getElementById("addCfQuickTerm");
+  const btnApplyQuickBlank = document.getElementById("btnApplyQuickBlank");
   const addCfPre = document.getElementById("addCfPre");
   const addCfAns = document.getElementById("addCfAns");
   const addCfPost = document.getElementById("addCfPost");
@@ -2352,6 +2405,7 @@
   const editCfFields = document.getElementById("editCfFields");
   const editCfOptsWrap = document.getElementById("editCfOptsWrap");
   const editCfOpts = document.getElementById("editCfOpts");
+  const editCfCorrectOptSelect = document.getElementById("editCfCorrectOptSelect");
   const editQPartSelect = document.getElementById("editQPartSelect");
   const editQSecSelect = document.getElementById("editQSecSelect");
   const editCfCatSelect = document.getElementById("editCfCatSelect");
@@ -3173,6 +3227,7 @@
           <div class="footer-left">
             <button type="button" class="btn" id="btnPrev" ${currentIdx === 0 ? "disabled" : ""}>上一题</button>
             <button type="button" class="btn" id="btnEditCurrentQuiz">编辑</button>
+            <button type="button" class="btn" id="btnAddToCfFromQuiz" title="将本题一键加入易混淆辨析，自定义类别与挖空">+ 易混淆</button>
             ${showMasterBtn ? `<button type="button" class="btn ${rec.mastered ? "btn-mastered" : ""}" id="btnToggleMaster">${masterBtnText}</button>` : ""}
           </div>
           <div class="footer-right">
@@ -3212,6 +3267,8 @@
     }
     const btnEditQ = document.getElementById("btnEditCurrentQuiz");
     if (btnEditQ) btnEditQ.addEventListener("click", () => openEditQuestionModal(q.id, false));
+    const btnAddCfQ = document.getElementById("btnAddToCfFromQuiz");
+    if (btnAddCfQ) btnAddCfQ.addEventListener("click", () => openAddCfModalFromQuiz(q));
     bindNoteHandlers(quizCardArea, q.id, renderQuiz);
   }
 
@@ -3863,7 +3920,7 @@
   function submitCfChoice(optVal) {
     if (cfAnswer !== null || cfQueue.length === 0) return;
     const item = CF_MAP.get(cfQueue[cfIdx]);
-    const isRight = optVal === item.ans;
+    const isRight = isCorrectCfOption(optVal, item);
     recordCfOutcome(item.id, optVal, isRight);
   }
 
@@ -3979,7 +4036,7 @@
         if (answered) {
           if (cfAnswer.chosen === opt) {
             cls += cfAnswer.isRight ? " selected-correct" : " selected-wrong";
-          } else if (opt === item.ans) {
+          } else if (isCorrectCfOption(opt, item)) {
             cls += " reveal-correct";
           }
         }
@@ -5254,6 +5311,7 @@
       const isChoice = item.type === "choice";
       editCfOptsWrap.classList.toggle("hidden", !isChoice);
       editCfOpts.value = isChoice ? (item.opts || []).join("；") : "";
+      if (isChoice) populateCorrectOptSelect(editCfCorrectOptSelect, editCfOpts.value, item.correctOpt || "");
       editCfPre.value = item.pre || "";
       editCfAns.value = item.ans || "";
       editCfPost.value = item.post || "";
@@ -5344,6 +5402,7 @@
         return;
       }
       let newOpts = curItem && curItem.opts ? curItem.opts : [];
+      let newCorrectOpt = "";
       if (curItem && curItem.type === "choice") {
         const parsedOpts = editCfOpts.value.split(/[;；]/).map(s => s.trim()).filter(Boolean);
         if (parsedOpts.length < 2) {
@@ -5351,18 +5410,23 @@
           editCfOpts.focus();
           return;
         }
-        if (!parsedOpts.includes(ans)) parsedOpts.unshift(ans);
         newOpts = parsedOpts;
+        newCorrectOpt = resolveCorrectCfOpt(newOpts, ans, editCfCorrectOptSelect.value);
+        if (!newCorrectOpt) {
+          showToast("请选择「对应正确选项」，或在选项中包含空缺词（支持用 / 合并）");
+          editCfCorrectOptSelect.focus();
+          return;
+        }
       }
       const newCat = editCfCatSelect.value || (curItem ? curItem.cat : "");
       const ccfIdx = customConfusableQuestions.findIndex(x => x.id === modalEditId);
       if (ccfIdx !== -1) {
         customConfusableQuestions[ccfIdx] = Object.assign({}, customConfusableQuestions[ccfIdx], {
-          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
+          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, correctOpt: newCorrectOpt, updatedAt: Date.now()
         });
       } else {
         questionOverrides[modalEditId] = {
-          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, updatedAt: Date.now()
+          cat: newCat, pre, ans, post, full: pre + ans + post, note, opts: newOpts, correctOpt: newCorrectOpt, updatedAt: Date.now()
         };
       }
       const newNoteVal = editNoteText.value.trim();
@@ -5774,15 +5838,107 @@
     addCfPreviewBox.classList.remove("hidden");
   }
 
+  function applyQuickBlank() {
+    const full = addCfSourceFull.value || "";
+    if (!full.trim()) {
+      showToast("请先输入或保留完整原句");
+      addCfSourceFull.focus();
+      return;
+    }
+    const selStart = addCfSourceFull.selectionStart;
+    const selEnd = addCfSourceFull.selectionEnd;
+    let startIdx = -1;
+    let endIdx = -1;
+    let term = "";
+    if (typeof selStart === "number" && typeof selEnd === "number" && selEnd > selStart) {
+      startIdx = selStart;
+      endIdx = selEnd;
+      term = full.slice(startIdx, endIdx).trim();
+      if (term) addCfQuickTerm.value = term;
+    } else {
+      term = addCfQuickTerm.value.trim();
+      if (!term) {
+        showToast("请在上框选中文字，或输入要挖空的关键词");
+        addCfQuickTerm.focus();
+        return;
+      }
+      startIdx = full.indexOf(term);
+      if (startIdx === -1) {
+        showToast("原句中未找到该关键词，请检查字词或直接选中原句文字");
+        addCfQuickTerm.focus();
+        return;
+      }
+      endIdx = startIdx + term.length;
+    }
+    addCfPre.value = full.slice(0, startIdx);
+    addCfAns.value = full.slice(startIdx, endIdx).trim();
+    addCfPost.value = full.slice(endIdx);
+    updateAddCfPreview();
+    showToast(`已将「${addCfAns.value}」设为挖空`);
+  }
+
   function openAddCfModal() {
     newCfCatBox.classList.add("hidden");
+    if (renameCfCatBox) renameCfCatBox.classList.add("hidden");
+    addCfQuickBlankWrap.classList.add("hidden");
+    addCfSourceFull.value = "";
+    addCfQuickTerm.value = "";
     addCfPre.value = "";
     addCfAns.value = "";
     addCfPost.value = "";
     addCfNote.value = "";
     populateAddCfCatSelect(null);
+    populateCorrectOptSelect(addCfCorrectOptSelect, addCfOptsInput.value, "");
     updateAddCfPreview();
     addCfModal.classList.add("open");
+  }
+
+  function openAddCfModalFromQuiz(q) {
+    if (!q) return;
+    newCfCatBox.classList.add("hidden");
+    if (renameCfCatBox) renameCfCatBox.classList.add("hidden");
+    populateAddCfCatSelect(null);
+    addCfQuickBlankWrap.classList.remove("hidden");
+
+    const qText = q.q || "";
+    const hasRange = !q.ok && Array.isArray(q.r) && q.r.length > 0;
+    const fixText = (q.fix || "").trim();
+    const fixFirst = fixText ? fixText.split(/[;；]/)[0].trim() : "";
+
+    if (hasRange && fixFirst) {
+      const [s, e] = q.r[0];
+      const wrongTerm = qText.slice(s, e);
+      const pre = qText.slice(0, s);
+      const post = qText.slice(e);
+      const fullCorrect = pre + fixFirst + post;
+      addCfSourceFull.value = fullCorrect;
+      addCfQuickTerm.value = fixFirst;
+      addCfPre.value = pre;
+      addCfAns.value = fixFirst;
+      addCfPost.value = post;
+      if (wrongTerm && wrongTerm !== fixFirst && fixFirst.length <= 18 && wrongTerm.length <= 18) {
+        setAddCfType(false);
+        addCfOptsInput.value = `${fixFirst}；${wrongTerm}`;
+      } else {
+        setAddCfType(true);
+        addCfOptsInput.value = "";
+      }
+    } else {
+      addCfSourceFull.value = qText;
+      addCfQuickTerm.value = "";
+      addCfPre.value = qText;
+      addCfAns.value = "";
+      addCfPost.value = "";
+      setAddCfType(true);
+      addCfOptsInput.value = "";
+    }
+    addCfNote.value = getNoteText(q.id) || "";
+    populateCorrectOptSelect(addCfCorrectOptSelect, addCfOptsInput.value, "");
+    updateAddCfPreview();
+    addCfModal.classList.add("open");
+    if (!addCfAns.value) {
+      setTimeout(() => addCfQuickTerm.focus(), 60);
+    }
   }
 
   function closeAddCfModal() {
@@ -5805,10 +5961,13 @@
     populateCfCats();
     populateAddCfCatSelect(name);
     addCfOptsInput.value = "";
+    populateCorrectOptSelect(addCfCorrectOptSelect, "", "");
     showToast(`已新增易混淆类别「${name}」`);
   }
 
   btnOpenAddCf.addEventListener("click", openAddCfModal);
+  btnApplyQuickBlank.addEventListener("click", applyQuickBlank);
+  bindEnterKey(addCfQuickTerm, applyQuickBlank);
   btnCancelAddCf.addEventListener("click", closeAddCfModal);
   addCfModal.addEventListener("click", (e) => {
     if (e.target === addCfModal) closeAddCfModal();
@@ -5816,6 +5975,8 @@
   addCfCatSelect.addEventListener("change", prefillOptsForSelectedCfCat);
   addCfTypeChoice.addEventListener("click", () => setAddCfType(false));
   addCfTypeBlank.addEventListener("click", () => setAddCfType(true));
+  addCfOptsInput.addEventListener("input", () => populateCorrectOptSelect(addCfCorrectOptSelect, addCfOptsInput.value));
+  editCfOpts.addEventListener("input", () => populateCorrectOptSelect(editCfCorrectOptSelect, editCfOpts.value));
   addCfPre.addEventListener("input", updateAddCfPreview);
   addCfAns.addEventListener("input", updateAddCfPreview);
   addCfPost.addEventListener("input", updateAddCfPreview);
@@ -5900,6 +6061,7 @@
       return;
     }
     let opts = [];
+    let correctOpt = "";
     if (!addCfIsBlank) {
       opts = addCfOptsInput.value.split(/[;；]/).map(s => s.trim()).filter(Boolean);
       if (opts.length < 2) {
@@ -5907,13 +6069,19 @@
         addCfOptsInput.focus();
         return;
       }
-      if (!opts.includes(ans)) opts.unshift(ans);
+      correctOpt = resolveCorrectCfOpt(opts, ans, addCfCorrectOptSelect.value);
+      if (!correctOpt) {
+        showToast("请选择「对应正确选项」，或在选项中包含空缺词（支持用 / 合并，如 分批/分类）");
+        addCfCorrectOptSelect.focus();
+        return;
+      }
     }
     const newItem = {
       id: "ccf_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
       cat,
       type: addCfIsBlank ? "blank" : "choice",
       opts,
+      correctOpt,
       ans,
       pre,
       post,
@@ -5927,16 +6095,20 @@
     rebuildIndex();
     populatePartSelects();
     populateCfCats();
-    cfCat = cat;
-    cfSelectCat.value = cat;
-    buildCfQueue();
-    const idx = cfQueue.indexOf(newItem.id);
-    if (idx !== -1) {
-      cfIdx = idx;
-      renderConfusable();
+    if (activeTab === "confusable") {
+      cfCat = cat;
+      cfSelectCat.value = cat;
+      buildCfQueue();
+      const idx = cfQueue.indexOf(newItem.id);
+      if (idx !== -1) {
+        cfIdx = idx;
+        renderConfusable();
+      }
+    } else {
+      buildCfQueue();
     }
     closeAddCfModal();
-    showToast(`已添加到「${cat}」并同步`);
+    showToast(`已加入易混淆「${cat}」并同步`);
   });
 
   btnDeleteCustomCf.addEventListener("click", () => {
