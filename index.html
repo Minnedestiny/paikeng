@@ -33,6 +33,7 @@
   html, body {
     margin: 0;
     padding: 0;
+    overscroll-behavior-x: none;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Inter", system-ui, sans-serif;
@@ -633,6 +634,7 @@
 
   /* Modal */
   .modal-backdrop {
+    overscroll-behavior: contain;
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, 0.45);
@@ -2660,6 +2662,18 @@
     if (!inputEl) return;
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); fn(); }
+    });
+  }
+
+  function bindModalBackdropClose(backdropEl, closeFn) {
+    if (!backdropEl) return;
+    let downOnBackdrop = false;
+    backdropEl.addEventListener("pointerdown", (e) => {
+      downOnBackdrop = (e.target === backdropEl);
+    });
+    backdropEl.addEventListener("click", (e) => {
+      if (downOnBackdrop && e.target === backdropEl) closeFn();
+      downOnBackdrop = false;
     });
   }
 
@@ -5384,9 +5398,7 @@
   editWrongTerms.addEventListener("input", updateEditModalPreview);
   editFixText.addEventListener("input", updateEditModalPreview);
   btnCancelEditModal.addEventListener("click", closeEditQuestionModal);
-  editQuestionModal.addEventListener("click", (e) => {
-    if (e.target === editQuestionModal) closeEditQuestionModal();
-  });
+  bindModalBackdropClose(editQuestionModal, closeEditQuestionModal);
 
   btnSaveEditModal.addEventListener("click", () => {
     if (!modalEditId) return;
@@ -5675,9 +5687,7 @@
 
   btnOpenMultiFilter.addEventListener("click", openMultiFilterModal);
   btnCloseMultiModal.addEventListener("click", closeMultiFilterModal);
-  multiFilterModal.addEventListener("click", (e) => {
-    if (e.target === multiFilterModal) closeMultiFilterModal();
-  });
+  bindModalBackdropClose(multiFilterModal, closeMultiFilterModal);
 
   multiActiveBar.addEventListener("click", (e) => {
     if (e.target.closest("#btnEditMultiFromBar")) {
@@ -5969,9 +5979,7 @@
   btnApplyQuickBlank.addEventListener("click", applyQuickBlank);
   bindEnterKey(addCfQuickTerm, applyQuickBlank);
   btnCancelAddCf.addEventListener("click", closeAddCfModal);
-  addCfModal.addEventListener("click", (e) => {
-    if (e.target === addCfModal) closeAddCfModal();
-  });
+  bindModalBackdropClose(addCfModal, closeAddCfModal);
   addCfCatSelect.addEventListener("change", prefillOptsForSelectedCfCat);
   addCfTypeChoice.addEventListener("click", () => setAddCfType(false));
   addCfTypeBlank.addEventListener("click", () => setAddCfType(true));
@@ -6286,9 +6294,7 @@
 
   btnOpenSearch.addEventListener("click", openSearchModal);
   btnCloseSearch.addEventListener("click", closeSearchModal);
-  searchModal.addEventListener("click", (e) => {
-    if (e.target === searchModal) closeSearchModal();
-  });
+  bindModalBackdropClose(searchModal, closeSearchModal);
   searchInput.addEventListener("input", renderSearchResults);
   searchScopeGroup.addEventListener("click", (e) => {
     const btn = e.target.closest(".search-pill");
@@ -6613,9 +6619,7 @@
   }
   btnBackup.addEventListener("click", openModal);
   btnCloseModal.addEventListener("click", closeModal);
-  backupModal.addEventListener("click", (e) => {
-    if (e.target === backupModal) closeModal();
-  });
+  bindModalBackdropClose(backupModal, closeModal);
 
   btnExport.addEventListener("click", () => {
     const payload = JSON.stringify(buildStatePayload({ version: 7, exportedAt: new Date().toISOString() }), null, 2);
