@@ -1666,7 +1666,7 @@
 
   <!-- Starred (Mastered/Retired) Questions View -->
   <section id="viewStarred" class="hidden">
-    <div class="wb-summary" id="starredSummary" style="grid-template-columns:repeat(3,minmax(0,1fr));"></div>
+    <div class="summary-grid" id="starredSummary" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));"></div>
 
     <div class="panel">
       <div class="filter-row" style="margin-top:0;padding-top:0;border-top:none;">
@@ -6268,7 +6268,7 @@
                 <span class="tag">${escapeHtml(CONFUSABLE_PART)}</span>
                 <span class="tag tag-soft">${escapeHtml(cf.cat)}</span>
               </div>
-              <div class="stat-badges"><span class="ok-badge" style="background:#fef3c7;color:#b45309;border-color:#fde68a;">★ 已斩</span></div>
+              <div class="card-right-meta">${renderStarBtnHtml(item.id, "", "js-starred-remove", true)}</div>
             </div>
             <div class="wb-item-q">${escapeHtml(fullText)}</div>
             ${ansHtml}
@@ -6292,7 +6292,7 @@
           <div class="wb-item">
             <div class="wb-item-head">
               <div class="breadcrumb">${renderQuestionTagsHtml(q, true, true)}</div>
-              <div class="stat-badges"><span class="ok-badge" style="background:#fef3c7;color:#b45309;border-color:#fde68a;">★ 已斩</span></div>
+              <div class="card-right-meta">${renderStarBtnHtml(item.id, "", "js-starred-remove", true)}</div>
             </div>
             <div class="wb-item-q">${renderAnnotatedQuestion(q)}</div>
             ${ansHtml}
