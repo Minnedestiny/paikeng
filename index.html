@@ -1512,7 +1512,14 @@
       </div>
       <div class="filter-row">
         <select class="select-box" id="cfSelectCat" aria-label="按易混淆系列筛选"></select>
+        <button type="button" class="btn-add-mini hidden" id="btnDeleteCfCatMain" style="border-color:var(--err-border);background:var(--err-bg);color:var(--err);padding:7px 10px;" title="删除当前选中的易混淆分类">删除分类</button>
         <button type="button" class="btn btn-primary" id="btnOpenAddCf" style="padding:7px 12px;font-size:13px;">+ 添加易混淆题</button>
+      </div>
+      <div class="inline-add-box hidden" id="deleteCfCatMainBox" style="margin-top:8px;background:var(--err-bg);border:1px solid var(--err-border);padding:8px 10px;border-radius:8px;font-size:12.5px;color:var(--err);flex-wrap:wrap;">
+        <span id="deleteCfCatMainMsg" style="flex:1 1 180px;min-width:0;"></span>
+        <button type="button" class="btn btn-sm btn-primary hidden" id="btnMoveAndDeleteCfCatMain">题归其他类并删分类</button>
+        <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDeleteCfCatMain">确认删除</button>
+        <button type="button" class="btn btn-sm" id="btnCancelDeleteCfCatMain">取消</button>
       </div>
     </div>
 
@@ -1789,6 +1796,7 @@
       <div class="select-with-add">
         <select class="select-box" id="addCfCatSelect"></select>
         <button type="button" class="btn-add-mini hidden" id="btnRenameCfCat" title="修改当前自定义类别名称">改名</button>
+        <button type="button" class="btn-add-mini" id="btnDeleteCfCatModal" style="border-color:var(--err-border);background:var(--err-bg);color:var(--err);" title="删除当前易混淆类别">删除</button>
         <button type="button" class="btn-add-mini" id="btnAddNewCfCat">+ 新建</button>
       </div>
       <div class="inline-add-box hidden" id="newCfCatBox">
@@ -1800,6 +1808,12 @@
         <input type="text" class="text-input" id="renameCfCatInput" placeholder="输入修改后的类别名称">
         <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRenameCfCat">保存</button>
         <button type="button" class="btn btn-sm" id="btnCancelRenameCfCat">取消</button>
+      </div>
+      <div class="inline-add-box hidden" id="deleteCfCatModalBox" style="background:var(--err-bg);border:1px solid var(--err-border);padding:6px 8px;border-radius:8px;font-size:12.5px;color:var(--err);flex-wrap:wrap;">
+        <span id="deleteCfCatModalMsg" style="flex:1 1 160px;min-width:0;"></span>
+        <button type="button" class="btn btn-sm btn-primary hidden" id="btnMoveAndDeleteCfCatModal">题归其他类并删分类</button>
+        <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDeleteCfCatModal">确认删除</button>
+        <button type="button" class="btn btn-sm" id="btnCancelDeleteCfCatModal">取消</button>
       </div>
     </div>
 
@@ -2011,7 +2025,7 @@
   let records = {}; // { [id]: { attempts, wrong, correct, lastResult, lastAt, mastered } }
   let customQuestions = []; // user-created questions with same schema
   let deletedCustomIds = []; // track deleted custom IDs for clean cloud merge
-  let customCategories = { parts: [], sections: {}, partMeta: {}, secMeta: {} }; // user-defined parts & sections per part + sync tombstones
+  let customCategories = { parts: [], sections: {}, partMeta: {}, secMeta: {}, cfCatMeta: {} }; // user-defined parts & sections per part + sync tombstones
   let customConfusableQuestions = []; // user-created confusable questions
   let deletedCustomCfIds = []; // deleted custom confusable IDs
   let customCfCategories = []; // user-defined confusable category names
@@ -2381,6 +2395,18 @@
   const newCfCatInput = document.getElementById("newCfCatInput");
   const btnConfirmNewCfCat = document.getElementById("btnConfirmNewCfCat");
   const btnCancelNewCfCat = document.getElementById("btnCancelNewCfCat");
+  const btnDeleteCfCatMain = document.getElementById("btnDeleteCfCatMain");
+  const deleteCfCatMainBox = document.getElementById("deleteCfCatMainBox");
+  const deleteCfCatMainMsg = document.getElementById("deleteCfCatMainMsg");
+  const btnMoveAndDeleteCfCatMain = document.getElementById("btnMoveAndDeleteCfCatMain");
+  const btnConfirmDeleteCfCatMain = document.getElementById("btnConfirmDeleteCfCatMain");
+  const btnCancelDeleteCfCatMain = document.getElementById("btnCancelDeleteCfCatMain");
+  const btnDeleteCfCatModal = document.getElementById("btnDeleteCfCatModal");
+  const deleteCfCatModalBox = document.getElementById("deleteCfCatModalBox");
+  const deleteCfCatModalMsg = document.getElementById("deleteCfCatModalMsg");
+  const btnMoveAndDeleteCfCatModal = document.getElementById("btnMoveAndDeleteCfCatModal");
+  const btnConfirmDeleteCfCatModal = document.getElementById("btnConfirmDeleteCfCatModal");
+  const btnCancelDeleteCfCatModal = document.getElementById("btnCancelDeleteCfCatModal");
   const btnRenameCfCat = document.getElementById("btnRenameCfCat");
   const renameCfCatBox = document.getElementById("renameCfCatBox");
   const renameCfCatInput = document.getElementById("renameCfCatInput");
@@ -2441,7 +2467,8 @@
               parts: Array.isArray(parsed.customCategories.parts) ? parsed.customCategories.parts : [],
               sections: (parsed.customCategories.sections && typeof parsed.customCategories.sections === "object") ? parsed.customCategories.sections : {},
               partMeta: (parsed.customCategories.partMeta && typeof parsed.customCategories.partMeta === "object") ? parsed.customCategories.partMeta : {},
-              secMeta: (parsed.customCategories.secMeta && typeof parsed.customCategories.secMeta === "object") ? parsed.customCategories.secMeta : {}
+              secMeta: (parsed.customCategories.secMeta && typeof parsed.customCategories.secMeta === "object") ? parsed.customCategories.secMeta : {},
+              cfCatMeta: (parsed.customCategories.cfCatMeta && typeof parsed.customCategories.cfCatMeta === "object") ? parsed.customCategories.cfCatMeta : {}
             };
           }
           if (parsed.notes && typeof parsed.notes === "object") {
@@ -2511,6 +2538,13 @@
     if (!customCategories.sections || typeof customCategories.sections !== "object") customCategories.sections = {};
     if (!customCategories.partMeta || typeof customCategories.partMeta !== "object") customCategories.partMeta = {};
     if (!customCategories.secMeta || typeof customCategories.secMeta !== "object") customCategories.secMeta = {};
+    if (!customCategories.cfCatMeta || typeof customCategories.cfCatMeta !== "object") customCategories.cfCatMeta = {};
+  }
+
+  function markCfCatMeta(catName, active, ts) {
+    if (!catName) return;
+    ensureCatMeta();
+    customCategories.cfCatMeta[catName] = { active: !!active, updatedAt: ts || Date.now() };
   }
 
   function markPartMeta(pName, active, ts) {
@@ -3879,6 +3913,10 @@
       cfCat = "ALL";
       cfSelectCat.value = "ALL";
     }
+    if (btnDeleteCfCatMain) {
+      btnDeleteCfCatMain.classList.toggle("hidden", cfCat === "ALL");
+      deleteCfCatMainBox.classList.add("hidden");
+    }
   }
 
   function buildCfQueue(customIds) {
@@ -4226,6 +4264,10 @@
     savedBookmark = null;
     renderReturnBanners();
     cfCat = cfSelectCat.value;
+    if (btnDeleteCfCatMain) {
+      btnDeleteCfCatMain.classList.toggle("hidden", cfCat === "ALL");
+      deleteCfCatMainBox.classList.add("hidden");
+    }
     buildCfQueue();
   });
 
@@ -5038,9 +5080,23 @@
     // 2.58 Merge customConfusableQuestions, deletedCustomCfIds, customCfCategories
     const delCfSet = new Set(deletedCustomCfIds.concat(Array.isArray(remote.deletedCustomCfIds) ? remote.deletedCustomCfIds : []));
     deletedCustomCfIds = [...delCfSet];
-    for (const c of (Array.isArray(remote.customCfCategories) ? remote.customCfCategories : [])) {
-      if (c && !customCfCategories.includes(c)) customCfCategories.push(c);
+    ensureCatMeta();
+    const rCfCatMeta = (remote.customCategories && remote.customCategories.cfCatMeta && typeof remote.customCategories.cfCatMeta === "object")
+      ? remote.customCategories.cfCatMeta : {};
+    const rCfCats = Array.isArray(remote.customCfCategories) ? remote.customCfCategories : [];
+    for (const c of customCfCategories) {
+      if (c && !customCategories.cfCatMeta[c]) customCategories.cfCatMeta[c] = { active: true, updatedAt: 1 };
     }
+    const allCfCatNames = new Set([...Object.keys(customCategories.cfCatMeta), ...Object.keys(rCfCatMeta), ...rCfCats]);
+    for (const c of allCfCatNames) {
+      if (!c) continue;
+      const lm = customCategories.cfCatMeta[c];
+      const rm = rCfCatMeta[c] || (rCfCats.includes(c) ? { active: true, updatedAt: 1 } : null);
+      if (rm && (!lm || (rm.updatedAt || 0) > (lm.updatedAt || 0))) {
+        customCategories.cfCatMeta[c] = { active: !!rm.active, updatedAt: rm.updatedAt || 1 };
+      }
+    }
+    customCfCategories = Object.keys(customCategories.cfCatMeta).filter(c => customCategories.cfCatMeta[c].active);
     const ccfMap = new Map();
     for (const q of customConfusableQuestions) {
       if (!delCfSet.has(q.id)) ccfMap.set(q.id, q);
@@ -5811,8 +5867,11 @@
   }
 
   function updateRenameCfCatVisibility() {
-    btnRenameCfCat.classList.toggle("hidden", !isUserCustomCfCat(addCfCatSelect.value));
+    const cur = addCfCatSelect.value;
+    btnRenameCfCat.classList.toggle("hidden", !isUserCustomCfCat(cur));
+    if (btnDeleteCfCatModal) btnDeleteCfCatModal.classList.toggle("hidden", !cur);
     renameCfCatBox.classList.add("hidden");
+    if (deleteCfCatModalBox) deleteCfCatModalBox.classList.add("hidden");
   }
 
   function prefillOptsForSelectedCfCat() {
@@ -5964,8 +6023,9 @@
     }
     if (!getAllCfCategories().includes(name)) {
       customCfCategories.push(name);
-      saveStorage();
     }
+    markCfCatMeta(name, true);
+    saveStorage();
     newCfCatInput.value = "";
     newCfCatBox.classList.add("hidden");
     populateCfCats();
@@ -6020,6 +6080,8 @@
     if (!getAllCfCategories().includes(newCat) && !customCfCategories.includes(newCat)) {
       customCfCategories.push(newCat);
     }
+    markCfCatMeta(oldCat, false, now);
+    markCfCatMeta(newCat, true, now);
     for (const q of customConfusableQuestions) {
       if (q.cat === oldCat) {
         q.cat = newCat;
@@ -6048,9 +6110,110 @@
   });
   btnCancelRenameCfCat.addEventListener("click", () => renameCfCatBox.classList.add("hidden"));
   btnConfirmRenameCfCat.addEventListener("click", confirmRenameCfCat);
-  renameCfCatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); confirmRenameCfCat(); }
+  bindEnterKey(renameCfCatInput, confirmRenameCfCat);
+
+  function deleteCfCategoryByName(catName, deleteQuestions) {
+    if (!catName || catName === "ALL") return;
+    const now = Date.now();
+    const allCats = getAllCfCategories();
+    const fallbackCat = allCats.find(c => c !== catName) || "自定义易混淆";
+
+    customCfCategories = customCfCategories.filter(x => x !== catName);
+    markCfCatMeta(catName, false, now);
+
+    const affected = getAllConfusableQuestions().filter(x => x.cat === catName);
+    for (const item of affected) {
+      const ccfIdx = customConfusableQuestions.findIndex(x => x.id === item.id);
+      if (deleteQuestions) {
+        if (ccfIdx !== -1) {
+          customConfusableQuestions.splice(ccfIdx, 1);
+          if (!deletedCustomCfIds.includes(item.id)) deletedCustomCfIds.push(item.id);
+        } else {
+          questionOverrides[item.id] = { _deleted: true, updatedAt: now };
+        }
+        delete records[item.id];
+      } else {
+        if (!getAllCfCategories().includes(fallbackCat) && !customCfCategories.includes(fallbackCat)) {
+          customCfCategories.push(fallbackCat);
+          markCfCatMeta(fallbackCat, true, now);
+        }
+        if (ccfIdx !== -1) {
+          customConfusableQuestions[ccfIdx] = Object.assign({}, customConfusableQuestions[ccfIdx], {
+            cat: fallbackCat, updatedAt: now
+          });
+        } else {
+          const prevOv = questionOverrides[item.id] && !questionOverrides[item.id]._restored ? questionOverrides[item.id] : {};
+          questionOverrides[item.id] = Object.assign({}, prevOv, {
+            cat: fallbackCat,
+            pre: item.pre,
+            ans: item.ans,
+            post: item.post,
+            full: item.full,
+            note: item.note,
+            opts: item.opts,
+            correctOpt: item.correctOpt || "",
+            updatedAt: now
+          });
+        }
+      }
+    }
+
+    if (cfCat === catName) cfCat = "ALL";
+    deleteCfCatMainBox.classList.add("hidden");
+    deleteCfCatModalBox.classList.add("hidden");
+    saveStorage();
+    rebuildIndex();
+    populatePartSelects();
+    populateCfCats();
+    if (addCfModal.classList.contains("open")) {
+      populateAddCfCatSelect(null);
+    }
+    buildCfQueue();
+    updateNavBadges();
+    updateStarredCounts();
+    if (activeTab === "wrong") renderWrongBook();
+    else if (activeTab === "starred") renderStarredManager();
+    if (searchModal.classList.contains("open")) renderSearchResults();
+
+    if (affected.length === 0) {
+      showToast(`已删除易混淆分类「${catName}」`);
+    } else if (deleteQuestions) {
+      showToast(`已删除分类「${catName}」及旗下 ${affected.length} 道题`);
+    } else {
+      showToast(`已删除分类「${catName}」，旗下 ${affected.length} 题已移入「${fallbackCat}」`);
+    }
+  }
+
+  function openDeleteCfCatPrompt(catName, boxEl, msgEl, moveBtnEl, confirmBtnEl) {
+    if (!catName || catName === "ALL") return;
+    const cnt = getAllConfusableQuestions().filter(x => x.cat === catName).length;
+    if (cnt > 0) {
+      msgEl.textContent = `分类「${catName}」下有 ${cnt} 道题：`;
+      moveBtnEl.classList.remove("hidden");
+      confirmBtnEl.textContent = "连同题目删除";
+    } else {
+      msgEl.textContent = `确认删除空分类「${catName}」？`;
+      moveBtnEl.classList.add("hidden");
+      confirmBtnEl.textContent = "确认删除";
+    }
+    boxEl.classList.toggle("hidden");
+  }
+
+  btnDeleteCfCatMain.addEventListener("click", () => {
+    openDeleteCfCatPrompt(cfCat, deleteCfCatMainBox, deleteCfCatMainMsg, btnMoveAndDeleteCfCatMain, btnConfirmDeleteCfCatMain);
   });
+  btnCancelDeleteCfCatMain.addEventListener("click", () => deleteCfCatMainBox.classList.add("hidden"));
+  btnMoveAndDeleteCfCatMain.addEventListener("click", () => deleteCfCategoryByName(cfCat, false));
+  btnConfirmDeleteCfCatMain.addEventListener("click", () => deleteCfCategoryByName(cfCat, true));
+
+  btnDeleteCfCatModal.addEventListener("click", () => {
+    newCfCatBox.classList.add("hidden");
+    renameCfCatBox.classList.add("hidden");
+    openDeleteCfCatPrompt(addCfCatSelect.value, deleteCfCatModalBox, deleteCfCatModalMsg, btnMoveAndDeleteCfCatModal, btnConfirmDeleteCfCatModal);
+  });
+  btnCancelDeleteCfCatModal.addEventListener("click", () => deleteCfCatModalBox.classList.add("hidden"));
+  btnMoveAndDeleteCfCatModal.addEventListener("click", () => deleteCfCategoryByName(addCfCatSelect.value, false));
+  btnConfirmDeleteCfCatModal.addEventListener("click", () => deleteCfCategoryByName(addCfCatSelect.value, true));
 
   btnSaveAddCf.addEventListener("click", () => {
     const cat = addCfCatSelect.value || "自定义易混淆";
